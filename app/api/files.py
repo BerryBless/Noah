@@ -3,7 +3,7 @@
 # function: 업로드된 파일 메타 목록 조회
 # ----------------------
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Form
 from app.db.mongo import db
 from app.models.file_meta import FileMeta
 from typing import List
@@ -105,3 +105,53 @@ async def delete_file_by_hash(file_hash: str):
     except Exception as e:
         logger.exception(f"[DELETE] 파일 삭제 중 예외 발생: {e}")
         raise HTTPException(status_code=500, detail="파일 삭제 중 오류가 발생했습니다.")
+
+
+# ----------------------
+# param   : file_hash - 대상 파일의 고유 해시
+# param   : tags - 새로 설정할 태그 문자열 리스트
+# function: 기존 태그 제거 및 새 태그 반영 (tag_count 갱신 포함)
+# return  : 수정 결과 메시지
+# ----------------------
+@router.put("/file/tag")
+async def update_file_tags(
+    file_hash: str = Form(...),
+    tags: List[str] = Form(default=[])
+):
+    try:
+        # ----------------------
+        # 파일 조회
+        # ----------------------
+        meta = await db.file_meta.find_one({"file_hash": file_hash})
+        if not meta:
+            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+        old_tag_ids = meta.get("tags", [])
+
+        # ----------------------
+        # 기존 태그 count 감소
+        # ----------------------
+        from app.services.tag_manager import (
+            decrease_tag_count_on_delete,
+            process_tags_on_upload
+        )
+        await decrease_tag_count_on_delete(db, old_tag_ids)
+
+        # ----------------------
+        # 새 태그 처리 (중복이면 count 증가)
+        # ----------------------
+        new_tag_ids = await process_tags_on_upload(db, tags, is_new_file=True)
+
+        # ----------------------
+        # DB 업데이트
+        # ----------------------
+        await db.file_meta.update_one(
+            {"file_hash": file_hash},
+            {"$set": {"tags": new_tag_ids}}
+        )
+
+        return {"message": f"{meta['file_name']} 태그가 수정되었습니다.", "tags": tags}
+
+    except Exception as e:
+        logger.exception(f"[TAG-UPDATE] 태그 수정 중 예외 발생: {e}")
+        raise HTTPException(status_code=500, detail="태그 수정 중 오류가 발생했습니다.")
