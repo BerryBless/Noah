@@ -82,30 +82,3 @@ async def delete_file_by_hash(file_hash: str):
     except Exception as e:
         print(f"[ERROR] 해시 삭제 실패: {e}")
         raise HTTPException(status_code=500, detail="삭제 중 오류가 발생했습니다.")
-
-
-# ----------------------
-# param   : file_hash - 수정할 파일의 해시
-# param   : tags - 새 태그 배열 (전체 교체)
-# function: 파일 태그 수정 (빈 배열이면 전체 삭제와 같음)
-# return  : 수정 결과 메시지
-# ----------------------
-@router.put("/by-hash/{file_hash}/tags")
-async def update_tags_by_hash(
-    file_hash: str = Path(...),
-    tags: List[str] = Body(...)
-):
-    try:
-        result = await db.file_meta.update_one(
-            {"file_hash": file_hash},
-            {"$set": {"tags": tags}}
-        )
-
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-
-        return {"message": f"{file_hash}의 태그 수정 완료", "tags": tags}
-
-    except Exception as e:
-        print(f"[ERROR] 태그 수정 실패: {e}")
-        raise HTTPException(status_code=500, detail="태그 수정 중 오류 발생")
