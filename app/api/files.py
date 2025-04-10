@@ -3,10 +3,10 @@
 # function: 업로드된 파일 메타 목록 조회
 # ----------------------
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body, Path
 from app.db.mongo import db
 from app.models.file_meta import FileMeta
-from typing import List
+from typing import List, Optional
 import os
 from fastapi import Path
 
@@ -14,24 +14,36 @@ DATA_DIR = "/data"
 
 router = APIRouter()
 
+
 # ----------------------
-# param   : page - 현재 페이지 번호 (1부터)
-# param   : size - 페이지당 항목 수
-# function: 페이징된 파일 메타 목록 반환
-# return  : {"total": 전체 수, "items": [FileMeta...]}
+# param   : page - 현재 페이지 번호 (기본 1)
+# param   : size - 페이지 당 항목 수 (기본 10)
+# param   : tags - AND 조건으로 포함해야 할 태그 목록 (옵션)
+# function: 태그 필터링 및 페이징을 통해 파일 메타데이터 조회
+# return  : {"total": 전체 개수, "page": 현재 페이지, "size": 페이지 크기, "items": 파일 리스트}
 # ----------------------
 @router.get("/", response_model=dict)
-async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=100)):
+async def get_files(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
+    tags: Optional[List[str]] = Query(None, description="AND 조건 태그 필터")
+):
     try:
         skip = (page - 1) * size
 
-        total = await db.file_meta.count_documents({})
-        cursor = db.file_meta.find().sort("created_at", -1).skip(skip).limit(size)
+        # 태그가 지정되었을 경우 AND 조건 필터 적용, 없으면 전체 조회
+        query = {"tags": {"$all": tags}} if tags else {}
+
+        # 총 개수 계산
+        total = await db.file_meta.count_documents(query)
+
+        # 목록 조회 (created_at 기준 최신 정렬)
+        cursor = db.file_meta.find(query).sort("created_at", -1).skip(skip).limit(size)
         items = await cursor.to_list(length=size)
 
-        # ID 제거
+        # ObjectId 제거
         for item in items:
-           item.pop("_id", None)
+            item.pop("_id", None)
 
         return {
             "total": total,
@@ -43,7 +55,6 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
     except Exception as e:
         print(f"[ERROR] 파일 목록 조회 실패: {e}")
         raise HTTPException(status_code=500, detail="파일 목록 조회 중 오류 발생")
-
 
 
 
