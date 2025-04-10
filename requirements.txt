@@ -9,3 +9,4 @@ sentence-transformers
 yake
 python-dotenv
 google-api-python-client
+motor
