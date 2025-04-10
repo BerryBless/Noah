@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-multipart
+aiofiles
+pymongo
+langdetect
+keybert
+sentence-transformers
+yake
+python-dotenv
+google-api-python-client
