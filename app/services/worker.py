@@ -7,9 +7,11 @@ import os
 import hashlib
 import shutil
 import logging
+from datetime import datetime
+from typing import List
 from app.db.mongo import db
 from app.models.file_meta import FileMeta
-from datetime import datetime
+from app.services.tag_manager import process_tags_on_upload
 
 DATA_DIR = "/data"
 TEMP_DIR = "/data/temp"
@@ -22,10 +24,11 @@ logging.basicConfig(level=logging.INFO)
 
 # ----------------------
 # param   : temp_path - 임시 저장된 파일 경로
-# function: 해시 중복 검사 후 data로 이동 또는 삭제
+# param   : tags - 업로드 시 전달된 태그 문자열 리스트
+# function: 해시 중복 검사 후 data로 이동 및 메타/태그 처리
 # return  : None
 # ----------------------
-async def run_worker(temp_path: str):
+async def run_worker(temp_path: str, tags: List[str]):
     try:
         file_name = os.path.basename(temp_path)
         file_size = os.path.getsize(temp_path)
@@ -35,10 +38,15 @@ async def run_worker(temp_path: str):
 
         # 중복 검사
         existing = await db.file_meta.find_one({"file_hash": file_hash})
-        if existing:
+        is_new_file = existing is None
+
+        if not is_new_file:
             os.remove(temp_path)
             logger.info(f"[WORKER] 중복 파일 발견 → 삭제됨: {file_name}")
             return
+
+        # 태그 처리
+        tag_ids = await process_tags_on_upload(db, tags, is_new_file)
 
         # data로 이동
         final_path = os.path.join(DATA_DIR, file_name)
@@ -50,15 +58,15 @@ async def run_worker(temp_path: str):
             file_size=file_size,
             file_hash=file_hash,
             thumbnail_path="",  # 썸네일 생성 예정
-            tags=[],  # 태그 생성 예정
+            tags=tag_ids,
             created_at=datetime.utcnow(),
         )
 
         await db.file_meta.insert_one(meta.dict())
-        logger.info(f"[WORKER] 메타데이터 등록 완료: {file_name}")
+        logger.info(f"[WORKER] 메타데이터 등록 완료: {file_name} + 태그 {tags}")
 
     except Exception as e:
-        logger.error(f"[WORKER] 처리 중 예외 발생: {e}")
+        logger.exception(f"[WORKER] 처리 중 예외 발생: {e}")
 
 # ----------------------
 # function: 파일 해시(SHA256) 계산

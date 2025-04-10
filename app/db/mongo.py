@@ -21,3 +21,9 @@ print(f"[DEBUG] MONGO_URI: {MONGO_URI}")
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["noah_db"] 
 
+# 기존 구조
+file_meta = db["file_meta"]
+tags = db["tags"]  # ← 이것을 "tags_collection"으로 쓰려면 아래처럼 alias 추가
+
+# 명시적인 이름 추가
+tags_collection = tags  # ← 이 줄이 없으면 import 시 오류 발생
