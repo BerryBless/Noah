@@ -11,7 +11,8 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install debugpy
 
 # 전체 프로젝트 복사
 COPY . .

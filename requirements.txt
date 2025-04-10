@@ -1,3 +1,4 @@
+debugpy
 fastapi
 uvicorn
 python-multipart
@@ -10,3 +11,6 @@ yake
 python-dotenv
 google-api-python-client
 motor
+aiohttp
+beautifulsoup4
+hf_xet
