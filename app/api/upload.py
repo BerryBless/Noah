@@ -3,13 +3,21 @@
 # function: 모든 파일 업로드 처리 (확장자 제한 없음)
 # ----------------------
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+import logging
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 import os
 import shutil
+from app.services.worker import run_worker
 
 router = APIRouter()
 
-UPLOAD_DIR = "/data"  # Docker 컨테이너에 마운트된 로컬 저장소
+TEMP_DIR = "/data/temp"
+
+# ----------------------
+# 로거 설정
+# ----------------------
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # ----------------------
 # param   : file - 업로드된 파일
@@ -17,17 +25,19 @@ UPLOAD_DIR = "/data"  # Docker 컨테이너에 마운트된 로컬 저장소
 # return  : 저장 완료 메시지
 # ----------------------
 @router.post("/file")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    temp_path = os.path.join(TEMP_DIR, file.filename)
+
     try:
-        save_path = os.path.join(UPLOAD_DIR, file.filename)
-
-        # 파일 저장
-        with open(save_path, "wb") as buffer:
+        with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        logger.info(f"[UPLOAD] 임시 저장 완료: {temp_path}")
+        
+        background_tasks.add_task(run_worker, temp_path)
+        
+        return {"message": f"{file.filename} 임시 저장 완료, 중복 검사 중입니다."}
 
-        return {"message": f"{file.filename} 저장 완료"}
-    
     except Exception as e:
-        # 예외 로그 출력 (추후 로거 연동)
-        print(f"[ERROR] 파일 저장 실패: {e}")
+        print(f"[ERROR] 업로드 실패: {e}")
         raise HTTPException(status_code=500, detail="파일 저장 중 오류가 발생했습니다.")
