@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 소스 복사
 COPY app/ ./app/
-COPY --from=frontend-build /app/front/dist /code/front/dist
+COPY --from=frontend-build /app/front/dist ./front/dist
 
 # 서버 실행
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

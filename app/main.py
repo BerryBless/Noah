@@ -7,6 +7,10 @@ from app.core.limit_upload import LimitUploadSizeMiddleware
 import os
 from fastapi.staticfiles import StaticFiles
 import logging
+from fastapi.responses import FileResponse
+from fastapi import Request
+
+
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
 
@@ -34,6 +38,16 @@ app.include_router(upload.router, prefix="/api/upload")
 # __file__ = /code/app/main.py
 # → /code/front/dist로 접근하도록 경로 생성
 # ----------------------
-react_build_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "front", "dist"))
-logger.info(f"React Build Path: {react_build_path}")
-app.mount("/ui", StaticFiles(directory=react_build_path, html=True), name="frontend")
+
+ui_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "front", "dist"))
+app.mount("/ui", StaticFiles(directory=ui_path, html=True), name="frontend")
+
+logger.info(f"React Build Path: {ui_path}")
+
+@ app.middleware("http")
+async def spa_redirect(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/ui") and response.status_code == 404:
+        index_path = os.path.join(ui_path, "index.html")
+        return FileResponse(index_path)
+    return response

@@ -4,6 +4,7 @@
 # ----------------------
 
 from fastapi import APIRouter, HTTPException, Query, Form
+from fastapi.responses import FileResponse
 from app.db.mongo import db
 from app.models.file_meta import FileMeta
 from typing import List, Optional
@@ -81,7 +82,33 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
         raise HTTPException(status_code=500, detail="파일 목록 조회 중 오류 발생")
 
 
+# ----------------------
+# param   : file_hash - 다운로드할 파일의 해시 문자열
+# function: 파일 경로에서 직접 파일 반환
+# return  : FileResponse (application/octet-stream)
+# ----------------------
+@router.get("/download/{file_hash}")
+async def download_file_by_hash(file_hash: str):
+    try:
+        # 파일 메타데이터 조회
+        meta = await db.file_meta.find_one({"file_hash": file_hash})
+        if not meta:
+            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
+        file_path = os.path.join(DATA_DIR, meta["file_name"])
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="파일이 서버에 존재하지 않습니다.")
+
+        # 실제 파일 응답
+        return FileResponse(
+            path=file_path,
+            filename=meta["file_name"],
+            media_type="application/octet-stream"  
+        )
+
+    except Exception as e:
+        logger.exception(f"[DOWNLOAD] 파일 다운로드 중 예외 발생: {e}")
+        raise HTTPException(status_code=500, detail="파일 다운로드 중 오류가 발생했습니다.")
 
 
 

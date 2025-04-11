@@ -14,8 +14,8 @@ call npm install
 call npm run build
 cd ..
 
-echo [2] Docker 이미지 캐시 없이 재빌드
-docker compose build --no-cache
+echo [2] Docker 이미지 캐시를 활용한 빌드
+docker compose build
 
 echo [3] 컨테이너 실행
 docker compose up -d
