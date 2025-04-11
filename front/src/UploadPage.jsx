@@ -40,9 +40,11 @@ export default function UploadPage() {
     if (thumb) formData.append("thumb", thumb);
     const tagList = tags.split(" ").map((t) => t.trim()).filter((t) => t);
     tagList.forEach((tag) => formData.append("tags", tag));
-
+    // upload_id 추가!
+    const { data } = await axios.get("/get-upload-id");
+    formData.append("upload_id", data.upload_id);
     try {
-      const res = await axios.post("/api/upload/file", formData, {
+      const res = await axios.post("/upload", formData, {
         onUploadProgress: (progressEvent) => {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadProgress(percent);
