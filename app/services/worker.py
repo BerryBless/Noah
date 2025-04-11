@@ -25,10 +25,11 @@ logging.basicConfig(level=logging.INFO)
 # ----------------------
 # param   : temp_path - 임시 저장된 파일 경로
 # param   : tags - 업로드 시 전달된 태그 문자열 리스트
+# param   : thumbnail_path - 클라이언트에서 업로드한 썸네일 이미지 경로 (선택)
 # function: 해시 중복 검사 후 data로 이동 및 메타/태그 처리
 # return  : None
 # ----------------------
-async def run_worker(temp_path: str, tags: List[str]):
+async def run_worker(temp_path: str, tags: List[str], thumbnail_path: str = ""):
     try:
         file_name = os.path.basename(temp_path)
         file_size = os.path.getsize(temp_path)
@@ -53,11 +54,12 @@ async def run_worker(temp_path: str, tags: List[str]):
         shutil.move(temp_path, final_path)
         logger.info(f"[WORKER] 파일 이동 완료: {file_name} → {final_path}")
 
+        # 메타데이터 저장
         meta = FileMeta(
             file_name=file_name,
             file_size=file_size,
             file_hash=file_hash,
-            thumbnail_path="",  # 썸네일 생성 예정
+            thumbnail_path=thumbnail_path,
             tags=tag_ids,
             created_at=datetime.utcnow(),
         )
@@ -67,6 +69,7 @@ async def run_worker(temp_path: str, tags: List[str]):
 
     except Exception as e:
         logger.exception(f"[WORKER] 처리 중 예외 발생: {e}")
+
 
 # ----------------------
 # function: 파일 해시(SHA256) 계산

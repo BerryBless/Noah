@@ -54,7 +54,7 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
                 tag_map[tag["_id"]] = tag["tag_name"]
 
         # ----------------------
-        # 변환된 결과 구성
+        # 변환된 결과 구성 - 태그명, 썸네일 포함
         # ----------------------
         items = []
         for item in raw_items:
@@ -66,6 +66,7 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
             else:
                 item["tags"] = [tag_map.get(raw_tags, str(raw_tags))]
 
+            item["thumbnail_path"] = item.get("thumbnail_path", "")  # 썸네일 명시 포함
             items.append(item)
 
         return {
@@ -219,6 +220,9 @@ async def search_files(
     page: int = Query(1, ge=1)
 ):
     try:
+        # ----------------------
+        # 조건 구성 (태그/키워드)
+        # ----------------------
         query = {}
         if tag:
             tag_doc = await db.tags.find_one({"tag_name": tag})
@@ -236,10 +240,14 @@ async def search_files(
         cursor = db.file_meta.find(query).sort("created_at", -1).skip(skip).limit(size)
         raw_items = await cursor.to_list(length=size)
 
+        # ----------------------
+        # 결과 구성 (태그 문자열 + 썸네일 포함)
+        # ----------------------
         items = []
         for item in raw_items:
             item.pop("_id", None)
             item["tags"] = [str(t) for t in item.get("tags", [])]
+            item["thumbnail_path"] = item.get("thumbnail_path", "")  # 썸네일 명시 포함
             items.append(item)
 
         return {
