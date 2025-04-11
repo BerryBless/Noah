@@ -11,3 +11,4 @@ services:
     volumes:
       - E:/noah:/data  # 로컬 파일 저장소
     restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -9,9 +9,10 @@ import shutil
 import logging
 from datetime import datetime
 from typing import List
-from app.db.mongo import db
+#from app.db.mongo import db
 from app.models.file_meta import FileMeta
 from app.services.tag_manager import process_tags_on_upload
+from app.db.mongo_sync import sync_db
 
 DATA_DIR = "/data"
 TEMP_DIR = "/data/temp"
@@ -81,3 +82,55 @@ async def get_file_hash(path: str) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             hash_sha256.update(chunk)
     return hash_sha256.hexdigest()
+
+# ----------------------
+# function: 스레드 기반 워커 함수 (MongoDB 동기 접근용)
+# ----------------------
+def run_worker_sync(temp_path: str, tags: List[str], thumbnail_path: str = ""):
+    try:
+        global sync_db
+        from app.services.tag_manager import process_tags_on_upload_sync  # 동기 버전 따로 작성
+
+        file_name = os.path.basename(temp_path)
+        file_size = os.path.getsize(temp_path)
+        file_hash = get_file_hash_sync(temp_path)
+
+        logger.info(f"[WORKER] 파일 처리 시작: {file_name}, 해시: {file_hash}")
+
+        existing = sync_db.file_meta.find_one({"file_hash": file_hash})
+        is_new_file = existing is None
+
+        if not is_new_file:
+            os.remove(temp_path)
+            logger.info(f"[WORKER] 중복 파일 삭제됨: {file_name}")
+            return
+
+        tag_ids = process_tags_on_upload_sync(sync_db, tags, is_new_file)
+
+        final_path = os.path.join(DATA_DIR, file_name)
+        shutil.move(temp_path, final_path)
+        logger.info(f"[WORKER] 파일 이동 완료: {final_path}")
+
+        meta = {
+            "file_name": file_name,
+            "file_size": file_size,
+            "file_hash": file_hash,
+            "thumbnail_path": thumbnail_path,
+            "tags": tag_ids,
+            "created_at": datetime.utcnow(),
+        }
+
+        sync_db.file_meta.insert_one(meta)
+        logger.info(f"[WORKER] 메타데이터 등록 완료: {file_name}")
+
+    except Exception as e:
+        logger.exception(f"[WORKER] 예외 발생: {e}")
+        
+
+def get_file_hash_sync(path: str) -> str:
+    hash_sha256 = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hash_sha256.update(chunk)
+    return hash_sha256.hexdigest()
+

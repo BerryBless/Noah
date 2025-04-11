@@ -3,12 +3,13 @@
 # function: 파일 업로드 API - ZIP 파일 + 썸네일 이미지 업로드 지원
 # ----------------------
 
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing import List, Optional
 import os
 import shutil
 import logging
-from app.services.worker import run_worker
+
+from app.services.worker_pool import get_worker_pool
 from app.services.tag_manager import split_tags
 
 router = APIRouter()
@@ -20,7 +21,6 @@ TEMP_DIR = "/data/temp"
 # param   : file - 업로드된 ZIP 파일
 # param   : thumb - 썸네일 이미지 (선택 사항)
 # param   : tags - 태그 문자열 리스트 (FormData로 전달)
-# param   : background_tasks - 워커 태스크 등록용
 # function: ZIP과 썸네일을 임시 저장 후 워커에 경로 전달
 # return  : 저장 완료 메시지
 # ----------------------
@@ -28,8 +28,7 @@ TEMP_DIR = "/data/temp"
 async def upload_file(
     file: UploadFile = File(...),
     thumb: Optional[UploadFile] = File(None),
-    tags: Optional[List[str]] = Form(default=[]),
-    background_tasks: BackgroundTasks = None
+    tags: Optional[List[str]] = Form(default=[])
 ):
     os.makedirs(TEMP_DIR, exist_ok=True)
     temp_path = os.path.join(TEMP_DIR, file.filename)
@@ -42,7 +41,7 @@ async def upload_file(
             shutil.copyfileobj(file.file, buffer)
         logger.info(f"[UPLOAD] 임시 저장 완료: {temp_path}")
 
-       # ----------------------
+        # ----------------------
         # 썸네일 이미지 저장 (선택적)
         # ----------------------
         thumb_path = ""
@@ -58,10 +57,18 @@ async def upload_file(
             thumb_path = f"/thumbs/{thumb.filename}"
 
         # ----------------------
-        # 워커 태스크 등록 - 썸네일 경로 포함
+        # 태그 문자열 전처리
         # ----------------------
         cleaned_tags = split_tags(tags)
-        background_tasks.add_task(run_worker, temp_path, cleaned_tags, thumb_path)
+
+        # ----------------------
+        # 워커 스레드 풀에 작업 등록
+        # ----------------------
+        worker_pool = get_worker_pool()
+        if worker_pool is not None:
+            worker_pool.add_task(temp_path, cleaned_tags, thumb_path)
+        else:
+            raise RuntimeError("WorkerPool이 초기화되지 않았습니다.")
 
         return {"message": f"{file.filename} 업로드 완료"}
 

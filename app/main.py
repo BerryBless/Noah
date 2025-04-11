@@ -51,3 +51,14 @@ async def spa_redirect(request: Request, call_next):
         index_path = os.path.join(ui_path, "index.html")
         return FileResponse(index_path)
     return response
+
+# ----------------------
+# function: 앱 시작 시 워커 스레드 풀 초기화
+# ----------------------
+from app.services.worker_pool import WorkerPool, set_worker_pool
+
+@app.on_event("startup")
+async def startup_worker_pool():
+    pool = WorkerPool(num_workers=4)
+    set_worker_pool(pool)
+    logger.info("[INIT] WorkerPool 초기화 완료")

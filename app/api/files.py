@@ -60,6 +60,7 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
         items = []
         for item in raw_items:
             item.pop("_id", None)
+            item["file_hash"] = item.get("file_hash")
 
             raw_tags = item.get("tags", [])
             if isinstance(raw_tags, list):
@@ -273,6 +274,8 @@ async def search_files(
         items = []
         for item in raw_items:
             item.pop("_id", None)
+            item["file_hash"] = item.get("file_hash")
+            
             item["tags"] = [str(t) for t in item.get("tags", [])]
             item["thumbnail_path"] =  os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
             items.append(item)

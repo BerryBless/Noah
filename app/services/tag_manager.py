@@ -67,3 +67,33 @@ def split_tags(raw_tags: List[str]) -> List[str]:
         parts = tag.split(",")  # 쉼표로 분리
         result.extend(part.strip() for part in parts if part.strip())
     return result
+
+# ----------------------
+# param   : db - pymongo DB 인스턴스
+# param   : tag_names - 유저가 보낸 태그 문자열 리스트
+# param   : is_new_file - 중복 검사 결과 새 파일 여부
+# function: 동기 pymongo 버전 태그 처리
+# return  : 태그 ObjectId 리스트
+# ----------------------
+def process_tags_on_upload_sync(db, tag_names: List[str], is_new_file: bool) -> List[ObjectId]:
+    tag_ids = []
+    for tag in tag_names:
+        try:
+            tag_doc = db.tags.find_one({"tag_name": tag})
+            if tag_doc:
+                if is_new_file:
+                    db.tags.update_one(
+                        {"_id": tag_doc["_id"]},
+                        {"$inc": {"tag_count": 1}}
+                    )
+                tag_ids.append(tag_doc["_id"])
+            else:
+                tag_count = 1 if is_new_file else 0
+                result = db.tags.insert_one({
+                    "tag_name": tag,
+                    "tag_count": tag_count
+                })
+                tag_ids.append(result.inserted_id)
+        except Exception as e:
+            logger.exception(f"[SYNC] 태그 처리 중 오류 발생: {tag} - {e}")
+    return tag_ids
