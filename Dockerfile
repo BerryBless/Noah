@@ -1,20 +1,21 @@
-# 베이스 이미지: Python 3.10 사용
-FROM python:3.10-slim
-
-# ping 및 기타 유틸 설치
-RUN apt-get update && apt-get install -y iputils-ping
-
-# 작업 디렉토리 설정
+# 1단계: React 앱 빌드
+FROM node:18 AS frontend-build
 WORKDIR /app
+COPY front/ ./front/
+WORKDIR /app/front
+RUN npm install && npm run build
 
-# requirements 복사 및 설치
+# 2단계: Python 서버 이미지
+FROM python:3.10
+WORKDIR /code
+
+# FastAPI + 의존성
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+# 소스 복사
+COPY app/ ./app/
+COPY --from=frontend-build /app/front/dist /code/front/dist
 
-# 전체 프로젝트 복사
-COPY . .
-
-# FastAPI 실행 (uvicorn)
+# 서버 실행
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -66,7 +66,7 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
             else:
                 item["tags"] = [tag_map.get(raw_tags, str(raw_tags))]
 
-            item["thumbnail_path"] = item.get("thumbnail_path", "")  # 썸네일 명시 포함
+            item["thumbnail_path"] = os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
             items.append(item)
 
         return {
@@ -247,7 +247,7 @@ async def search_files(
         for item in raw_items:
             item.pop("_id", None)
             item["tags"] = [str(t) for t in item.get("tags", [])]
-            item["thumbnail_path"] = item.get("thumbnail_path", "")  # 썸네일 명시 포함
+            item["thumbnail_path"] =  os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
             items.append(item)
 
         return {
