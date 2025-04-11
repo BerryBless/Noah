@@ -44,7 +44,11 @@ async def run_worker(temp_path: str, tags: List[str], thumbnail_path: str = ""):
 
         if not is_new_file:
             os.remove(temp_path)
-            logger.info(f"[WORKER] 중복 파일 발견 → 삭제됨: {file_name}")
+            if thumbnail_path:
+                thumb_abs = os.path.join("/data", "thumbs", os.path.basename(thumbnail_path))
+                if os.path.exists(thumb_abs):
+                    os.remove(thumb_abs)
+            logger.info(f"[WORKER] 중복 파일 삭제됨: {file_name}")
             return
 
         # 태그 처리

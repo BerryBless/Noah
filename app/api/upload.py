@@ -48,14 +48,20 @@ async def upload_file(
         if thumb:
             thumbs_dir = os.path.join("/data", "thumbs")
             os.makedirs(thumbs_dir, exist_ok=True)
-            saved_thumb_path = os.path.join(thumbs_dir, thumb.filename)
+
+            # 원본 파일명을 기반으로 썸네일 이름 구성
+            base_name = os.path.splitext(file.filename)[0]  # 예: "photo"
+            thumb_ext = os.path.splitext(thumb.filename)[1]  # 예: ".png"
+            thumb_save_name = f"{base_name}_thumb{thumb_ext}"  # 예: "photo_thumb.png"
+
+            saved_thumb_path = os.path.join(thumbs_dir, thumb_save_name)
             with open(saved_thumb_path, "wb") as buffer:
                 shutil.copyfileobj(thumb.file, buffer)
             logger.info(f"[UPLOAD] 썸네일 저장 완료: {saved_thumb_path}")
 
             # 클라이언트 접근 경로 기준으로 저장
-            thumb_path = f"/thumbs/{thumb.filename}"
-
+            thumb_path = f"/thumbs/{thumb_save_name}"
+            
         # ----------------------
         # 태그 문자열 전처리
         # ----------------------

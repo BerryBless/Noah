@@ -140,6 +140,15 @@ async def delete_file_by_hash(file_hash: str):
         else:
             logger.warning(f"[DELETE] 파일 경로 없음 (DB만 존재): {file_path}")
 
+        # 썸네일 삭제
+        thumb_path = meta.get("thumbnail_path", "")
+        if thumb_path:
+            abs_thumb_path = os.path.join("/data", "thumbs", os.path.basename(thumb_path))
+            if os.path.exists(abs_thumb_path):
+                os.remove(abs_thumb_path)
+                logger.info(f"[DELETE] 썸네일 삭제 완료: {abs_thumb_path}")
+
+
         # ----------------------
         # 메타데이터 삭제
         # ----------------------
@@ -275,7 +284,7 @@ async def search_files(
         for item in raw_items:
             item.pop("_id", None)
             item["file_hash"] = item.get("file_hash")
-            
+
             item["tags"] = [str(t) for t in item.get("tags", [])]
             item["thumbnail_path"] =  os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
             items.append(item)
