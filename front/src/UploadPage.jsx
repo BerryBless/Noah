@@ -8,8 +8,7 @@ export default function UploadPage() {
   const [thumb, setThumb] = useState(null);
   const [thumbPreview, setThumbPreview] = useState(null);
   const [tags, setTags] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const [thumbDragOver, setThumbDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
 
   const handleThumbChange = (e) => {
@@ -21,28 +20,6 @@ export default function UploadPage() {
       reader.readAsDataURL(file);
     } else {
       setThumbPreview(null);
-    }
-  };
-
-  const handleThumbDrop = (e) => {
-    e.preventDefault();
-    setThumbDragOver(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped && dropped.type.startsWith("image/")) {
-      setThumb(dropped);
-      const reader = new FileReader();
-      reader.onloadend = () => setThumbPreview(reader.result);
-      reader.readAsDataURL(dropped);
-    }
-  };
-
-  const handleFileDrop = (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      setFile(droppedFile);
-      setFileName(droppedFile.name);
     }
   };
 
@@ -61,20 +38,23 @@ export default function UploadPage() {
     const formData = new FormData();
     formData.append("file", file, fileName);
     if (thumb) formData.append("thumb", thumb);
-
-    const tagList = tags
-      .split(" ")
-      .map((tag) => tag.trim())
-      .filter((t) => t);
+    const tagList = tags.split(" ").map((t) => t.trim()).filter((t) => t);
     tagList.forEach((tag) => formData.append("tags", tag));
 
     try {
-      const res = await axios.post("/api/upload/file", formData);
+      const res = await axios.post("/api/upload/file", formData, {
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent);
+        },
+      });
       alert("업로드 완료: " + res.data.message);
+      setUploadProgress(0);
       window.location.href = "/ui/";
     } catch (err) {
       console.error("업로드 실패", err);
       alert("업로드 실패: " + err.response?.data?.detail || err.message);
+      setUploadProgress(0);
     }
   };
 
@@ -82,16 +62,10 @@ export default function UploadPage() {
     <div className="p-6 space-y-8">
       <h1 className="text-2xl font-bold">업로드할 파일</h1>
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        {/* 썸네일 */}
+        {/* 썸네일 업로드 */}
         <div
           onClick={() => document.getElementById("thumbInput").click()}
-          onDrop={handleThumbDrop}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setThumbDragOver(true);
-          }}
-          onDragLeave={() => setThumbDragOver(false)}
-          className={`w-full h-40 border-2 border-dashed flex items-center justify-center rounded cursor-pointer transition-colors ${thumbDragOver ? "bg-yellow-100 border-yellow-500" : "bg-yellow-300"}`}
+          className="w-full h-40 border-2 border-dashed flex items-center justify-center rounded cursor-pointer bg-yellow-300"
         >
           {thumbPreview ? (
             <img src={thumbPreview} alt="thumb preview" className="object-cover w-full h-full rounded" />
@@ -107,17 +81,11 @@ export default function UploadPage() {
           />
         </div>
 
-        {/* 우측 입력란 */}
+        {/* 파일 업로드 */}
         <div className="flex flex-col gap-4 w-full">
           <div
             onClick={() => document.getElementById("fileInput").click()}
-            onDrop={handleFileDrop}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            className={`border-2 border-dashed rounded px-4 py-6 text-center cursor-pointer transition-colors ${dragOver ? "bg-yellow-100 border-yellow-500" : "bg-yellow-50"}`}
+            className="border-2 border-dashed rounded px-4 py-6 text-center cursor-pointer bg-yellow-50"
           >
             {fileName ? (
               <div>
@@ -130,7 +98,7 @@ export default function UploadPage() {
                 />
               </div>
             ) : (
-              <span className="text-gray-500 text-sm">ZIP 파일을 여기에 드래그하거나 클릭하세요</span>
+              <span className="text-gray-500 text-sm">파일을 드래그하거나 클릭해서 선택하세요</span>
             )}
             <input
               type="file"
@@ -150,6 +118,17 @@ export default function UploadPage() {
               className="border rounded px-2 py-1 w-full"
             />
           </div>
+
+          {uploadProgress > 0 && (
+            <div className="w-full bg-gray-200 rounded">
+              <div
+                className="bg-blue-600 text-white text-xs p-1 text-center rounded"
+                style={{ width: `${uploadProgress}%` }}
+              >
+                {uploadProgress}%
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
