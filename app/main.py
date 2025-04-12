@@ -1,5 +1,6 @@
 # app/main.py
 
+from app.core import background_worker
 from app.utils.logger import logger
 import os
 from fastapi import FastAPI, Request
@@ -51,13 +52,14 @@ async def spa_redirect(request: Request, call_next):
         return FileResponse(index_path)
     return response
 
-# ----------------------
-# function: 앱 시작 시 워커 스레드 풀 초기화
-# ----------------------
-from app.services.worker_pool import WorkerPool, set_worker_pool
 
+
+
+# ----------------------
+# 백그라운드 워커 시작 (서버 시작 시)
+# ----------------------
 @app.on_event("startup")
-async def startup_worker_pool():
-    pool = WorkerPool(num_workers=4)
-    set_worker_pool(pool)
+async def startup_event():
+    logger.info("[INIT] WorkerPool 초기화 시작")
+    background_worker.start_workers()
     logger.info("[INIT] WorkerPool 초기화 완료")

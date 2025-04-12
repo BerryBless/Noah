@@ -1,4 +1,3 @@
-
 # ----------------------
 # file   : app/core/background_worker.py
 # function: 업로드된 파일을 백그라운드 워커에서 처리 (중복 검사 → /data로 이동)
@@ -10,14 +9,13 @@ from app.utils.hash_util import compute_sha256
 import threading
 import queue
 from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 from loguru import logger
-import asyncio
 
 # ----------------------
-# MongoDB 연결 설정
+# MongoDB 연결 설정 (동기)
 # ----------------------
-client = AsyncIOMotorClient("mongodb://host.docker.internal:27017")
+client = MongoClient("mongodb://host.docker.internal:27017")
 db = client["noah_db"]
 file_meta = db["file_meta"]
 upload_queue = db["upload_queue"]
@@ -29,87 +27,86 @@ upload_task_queue = queue.Queue()
 NUM_WORKERS = 4
 
 # ----------------------
-# param   : upload_id, temp_path
+# param   : upload_id, file_name, temp_path
 # function: 해시 검사 후 중복 체크 → /data 로 이동
 # ----------------------
-async def process_upload(upload_id: str, temp_path: str):
+def process_upload(upload_id: str, file_name: str, temp_path: str):
     try:
-        logger.info(f"[WORKER] {upload_id} 처리 시작")
-        await upload_queue.update_one({"upload_id": upload_id}, {"$set": {"status": "processing"}})
+        logger.info(f"[WORKER] {upload_id} / {file_name} 처리 시작")
+
+        upload_queue.update_one(
+            {"upload_id": upload_id, "file_name": file_name},
+            {"$set": {"status": "processing"}}
+        )
 
         # 해시 계산
         file_hash = compute_sha256(temp_path)
 
         # 중복 검사
-        duplicate = await file_meta.find_one({"file_hash": file_hash})
+        duplicate = file_meta.find_one({"file_hash": file_hash})
         if duplicate:
-            await upload_queue.update_one({"upload_id": upload_id}, {"$set": {"status": "duplicate"}})
+            upload_queue.update_one(
+                {"upload_id": upload_id, "file_name": file_name},
+                {"$set": {"status": "duplicate"}}
+            )
             os.remove(temp_path)
-            logger.info(f"[WORKER] {upload_id} 중복파일로 삭제됨")
+            logger.info(f"[WORKER] {upload_id} / {file_name} 중복파일로 삭제됨")
             return
 
-        # DB에서 원본 파일명 추출
-        upload_info = await upload_queue.find_one({"upload_id": upload_id})
-        original_filename = upload_info["file_name"]
+        # 썸네일 경로 가져오기 (없으면 "")
+        upload_info = upload_queue.find_one({"upload_id": upload_id, "file_name": file_name})
+        thumb_path = upload_info.get("thumb_path", "") if upload_info else ""
 
         # 최종 저장 위치: /data/파일명
         final_dir = "/data"
-        os.makedirs(final_dir, exist_ok=True)  # /data 디렉토리 없으면 생성
+        os.makedirs(final_dir, exist_ok=True)
 
-        final_path = os.path.join(final_dir, original_filename)
+        final_path = os.path.join(final_dir, file_name)
         shutil.move(temp_path, final_path)
 
-        # DB 등록
-        await file_meta.insert_one({
-            "file_name": original_filename,
+        # 메타데이터 저장
+        file_meta.insert_one({
+            "file_name": file_name,
             "file_path": final_path,
             "file_size": os.path.getsize(final_path),
             "file_hash": file_hash,
-            "thumb_path": upload_info.get("thumb_path", ""),
+            "thumb_path": thumb_path,
             "tags": [],
             "status": "completed",
             "created_at": datetime.utcnow(),
         })
 
-        # 업로드 완료 상태 반영
-        await upload_queue.update_one({"upload_id": upload_id}, {"$set": {"status": "completed"}})
-        logger.info(f"[WORKER] {upload_id} 완료")
+        upload_queue.update_one(
+            {"upload_id": upload_id, "file_name": file_name},
+            {"$set": {"status": "completed"}}
+        )
+        logger.info(f"[WORKER] {upload_id} / {file_name} 완료")
 
-    except Exception as e:
-        await upload_queue.update_one({"upload_id": upload_id}, {"$set": {"status": "failed"}})
-        logger.exception(f"[WORKER] {upload_id} 처리 실패")
+    except Exception:
+        upload_queue.update_one(
+            {"upload_id": upload_id, "file_name": file_name},
+            {"$set": {"status": "failed"}}
+        )
+        logger.exception(f"[WORKER] {upload_id} / {file_name} 처리 실패")
 
 # ----------------------
-# function: 워커 루프 실행 (스레드 내부에서 이벤트 루프 생성)
+# function: 워커 루프 실행 (threading 사용)
 # ----------------------
 def worker_loop():
-    def thread_main():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        async def loop_worker():
-            while True:
-                upload_id, temp_path = await loop.run_in_executor(None, upload_task_queue.get)
-                try:
-                    await process_upload(upload_id, temp_path)
-                except Exception:
-                    logger.exception(f"[WORKER] {upload_id} 처리 실패 (루프 내부)")
-                finally:
-                    upload_task_queue.task_done()
-
-        loop.run_until_complete(loop_worker())
-
-    threading.Thread(target=thread_main, daemon=True).start()
+    while True:
+        upload_id, file_name, temp_path = upload_task_queue.get()
+        process_upload(upload_id, file_name, temp_path)
+        upload_task_queue.task_done()
 
 # ----------------------
-# param   : upload_id, temp_path
-# function: 큐에 작업 등록
+# param   : upload_id, file_name, temp_path
+# function: 워커에 작업 등록
 # ----------------------
-def enqueue(upload_id: str, temp_path: str):
-    upload_task_queue.put((upload_id, temp_path))
+def enqueue(upload_id: str, file_name: str, temp_path: str):
+    upload_task_queue.put((upload_id, file_name, temp_path))
 
 # ----------------------
-# function: 여러 워커 스레드 시작
+# function: 모든 워커 스레드 시작
 # ----------------------
 def start_workers():
     for _ in range(NUM_WORKERS):
