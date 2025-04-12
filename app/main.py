@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 from app.api import upload, get_upload_id, ws_upload, files, proxy_download
-from app.core.limit_upload import LimitUploadSizeMiddleware
+#from app.core.limit_upload import LimitUploadSizeMiddleware
 
 app = FastAPI()
 
@@ -22,7 +22,7 @@ app.mount("/thumbs", StaticFiles(directory="/data/thumbs"), name="thumbs")
 # ----------------------
 # function: 최대 100GB 제한 미들웨어 추가
 # ----------------------
-app.add_middleware(LimitUploadSizeMiddleware)
+#app.add_middleware(LimitUploadSizeMiddleware)
 
 # ----------------------
 # function: API 라우터 등록
