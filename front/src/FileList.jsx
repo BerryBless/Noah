@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // ← 추가
 import axios from 'axios';
 
 export default function FileList() {
-  console.log("🧩 렌더링됨")
+  console.log("🧩 렌더링됨");
 
   const [files, setFiles] = useState([]);
+  const navigate = useNavigate(); // ← 추가
 
   useEffect(() => {
     console.log("✅ 파일 목록 불러오는 중...");
@@ -64,7 +66,7 @@ export default function FileList() {
               className="w-36 h-36 object-cover bg-gray-300"
             />
 
-            {/* 텍스트 + 태그 + 삭제버튼 포함 영역 */}
+            {/* 텍스트 + 태그 + 버튼 영역 */}
             <div className="flex-1 space-y-2">
               <div className="flex justify-between items-center">
                 <a
@@ -74,14 +76,25 @@ export default function FileList() {
                 >
                   {file.file_name}
                 </a>
-                <button
-                  onClick={() => handleDelete(file.file_hash)}
-                  className="text-red-600 border border-red-600 hover:bg-red-100 px-2 py-1 text-sm rounded"
-                >
-                  삭제
-                </button>
+
+                {/* 수정 + 삭제 버튼 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/edit/${file.file_hash}`)}
+                    className="text-yellow-600 border border-yellow-600 hover:bg-yellow-100 px-2 py-1 text-sm rounded"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => handleDelete(file.file_hash)}
+                    className="text-red-600 border border-red-600 hover:bg-red-100 px-2 py-1 text-sm rounded"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
 
+              {/* 태그 출력 */}
               {file.tags && file.tags.length > 0 ? (
                 <div className="grid grid-cols-4 gap-2">
                   {file.tags.map((tag, i) => (

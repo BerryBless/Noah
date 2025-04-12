@@ -13,6 +13,7 @@ from fastapi import Path
 from bson import ObjectId
 from fastapi import HTTPException
 from app.utils.logger import logger
+import shutil
 
 DATA_DIR = "/data"
 
@@ -311,3 +312,98 @@ async def search_files(
     except Exception as e:
         logger.exception(f"[SEARCH] 복합 검색 중 예외 발생: {e}")
         raise HTTPException(status_code=500, detail="파일 검색 중 오류가 발생했습니다.")
+
+# ----------------------
+# function: file_hash 기준으로 파일 정보 조회 (수정용)
+# ----------------------
+@router.get("/file/hash/{file_hash}")
+async def get_file_meta(file_hash: str):
+    doc = await db.file_meta.find_one({"file_hash": file_hash})
+    if not doc:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+    from app.services.tag_manager import get_tag_names_by_ids
+    tag_names = await get_tag_names_by_ids(db, doc.get("tags", []))
+
+    return {
+        "file_name": doc.get("file_name", ""),
+        "tags": tag_names,
+        "thumbnail_path": os.path.basename(doc.get("thumbnail_path", ""))
+    }
+
+# ----------------------
+# file   : app/api/files.py
+# function: file_hash 기준으로 파일명, 썸네일, 태그 한 번에 수정
+# ----------------------
+
+from fastapi import UploadFile, File, Form
+from typing import List
+
+@router.put("/file/meta")
+async def update_file_metadata(
+    file_hash: str = Form(...),
+    file_name: str = Form(...),
+    tags: List[str] = Form(default=[]),
+    thumb: UploadFile = File(None)
+):
+    try:
+        # ----------------------
+        # 기존 메타 조회
+        # ----------------------
+        meta = await db.file_meta.find_one({"file_hash": file_hash})
+        if not meta:
+            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+        update_fields = {"file_name": file_name}
+
+        # ----------------------
+        # 썸네일 교체 처리
+        # ----------------------
+        if thumb:
+            old_thumb = meta.get("thumbnail_path", "")
+            if old_thumb:
+                abs_path = os.path.join("/data/thumbs", os.path.basename(old_thumb))
+                if os.path.exists(abs_path):
+                    os.remove(abs_path)
+
+            thumbs_dir = os.path.join("/data", "thumbs")
+            os.makedirs(thumbs_dir, exist_ok=True)
+            new_thumb_path = os.path.join(thumbs_dir, thumb.filename)
+            with open(new_thumb_path, "wb") as f:
+                shutil.copyfileobj(thumb.file, f)
+
+            update_fields["thumbnail_path"] = f"/thumbs/{thumb.filename}"
+
+        # ----------------------
+        # 태그 전처리 (공백 제거 및 빈 값 제거)
+        # ----------------------
+        cleaned_tags = [tag.strip() for tag in tags if tag.strip()]
+        logger.debug(f"[META-UPDATE] 수신된 tags: {tags} → 정제 후: {cleaned_tags}")
+
+        # ----------------------
+        # 태그 처리 (기존 감소 + 새 증가)
+        # ----------------------
+        from app.services.tag_manager import (
+            decrease_tag_count_on_delete,
+            process_tags_on_upload
+        )
+
+        old_tags = meta.get("tags", [])
+        await decrease_tag_count_on_delete(db, old_tags)
+
+        new_tag_ids = await process_tags_on_upload(db, cleaned_tags, is_new_file=True)
+        update_fields["tags"] = new_tag_ids
+
+        # ----------------------
+        # DB 업데이트
+        # ----------------------
+        await db.file_meta.update_one(
+            {"file_hash": file_hash},
+            {"$set": update_fields}
+        )
+
+        return {"message": "파일 정보가 성공적으로 수정되었습니다."}
+
+    except Exception as e:
+        logger.exception(f"[META-UPDATE] 파일 메타데이터 수정 중 예외 발생: {e}")
+        raise HTTPException(status_code=500, detail="파일 메타데이터 수정 중 오류 발생")

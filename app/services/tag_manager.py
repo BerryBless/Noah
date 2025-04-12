@@ -96,3 +96,16 @@ def process_tags_on_upload_sync(db, tag_names: List[str], is_new_file: bool) -> 
         except Exception as e:
             logger.exception(f"[SYNC] 태그 처리 중 오류 발생: {tag} - {e}")
     return tag_ids
+
+# ----------------------
+# param   : db - MongoDB 세션
+# param   : tag_ids - ObjectId 리스트
+# function: 태그 ID 목록을 이름 리스트로 변환
+# return  : tag_name 리스트
+# ----------------------
+async def get_tag_names_by_ids(db: AsyncIOMotorDatabase, tag_ids: List[ObjectId]) -> List[str]:
+    tag_names = []
+    cursor = db.tags.find({"_id": {"$in": tag_ids}})
+    async for tag in cursor:
+        tag_names.append(tag["tag_name"])
+    return tag_names
