@@ -1,17 +1,48 @@
 # ----------------------
 # file   : app/api/ws_upload.py
-# function: WebSocket으로 업로드 진행률 브로드캐스트
+# function: WebSocket을 통해 업로드 상태를 실시간 전송
 # ----------------------
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.core.ws_manager import websocket_manager
+from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio
+import json
 
 router = APIRouter()
+client = AsyncIOMotorClient("mongodb://host.docker.internal:27017")
+db = client["noah_db"]
+upload_queue = db["upload_queue"]
 
-@router.websocket("/ws/upload-progress/{upload_id}")
-async def upload_progress_ws(websocket: WebSocket, upload_id: str):
-    await websocket_manager.connect(upload_id, websocket)
+# ----------------------
+# param   : websocket - 클라이언트 WebSocket 연결 객체
+# param   : upload_id - 업로드 식별 ID
+# function: 주기적으로 업로드 상태를 조회하고 클라이언트에 전송
+# return  : 연결 종료 시 자동 종료
+# ----------------------
+@router.websocket("/ws/upload/{upload_id}")
+async def websocket_upload_status(websocket: WebSocket, upload_id: str):
+    await websocket.accept()
+
     try:
         while True:
-            await websocket.receive_text()  # 클라이언트 heartbeat 또는 keep-alive
+            # 상태 조회
+            doc = await upload_queue.find_one({"upload_id": upload_id})
+            if doc is None:
+                await websocket.send_json({"status": "not_found"})
+                break
+
+            status = doc.get("status", "unknown")
+            await websocket.send_json({"status": status})
+
+            # 완료 상태면 연결 종료
+            if status in ["completed", "failed", "duplicate"]:
+                break
+
+            await asyncio.sleep(1)
+
     except WebSocketDisconnect:
-        await websocket_manager.disconnect(upload_id, websocket)
+        print(f"[WS] 클라이언트 연결 종료: {upload_id}")
+
+    except Exception as e:
+        await websocket.send_json({"status": "error", "detail": str(e)})
+        await websocket.close()

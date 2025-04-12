@@ -1,3 +1,8 @@
+// ----------------------
+// file   : UploadPage.jsx
+// function: 썸네일/파일/태그 입력 유지 + WebSocket 업로드 상태 확인 추가
+// ----------------------
+
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +14,7 @@ export default function UploadPage() {
   const [thumbPreview, setThumbPreview] = useState(null);
   const [tags, setTags] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [status, setStatus] = useState("");
   const navigate = useNavigate();
 
   const handleThumbChange = (e) => {
@@ -40,19 +46,20 @@ export default function UploadPage() {
     if (thumb) formData.append("thumb", thumb);
     const tagList = tags.split(" ").map((t) => t.trim()).filter((t) => t);
     tagList.forEach((tag) => formData.append("tags", tag));
-    // upload_id 추가!
-    const { data } = await axios.get("/get-upload-id");
-    formData.append("upload_id", data.upload_id);
+
     try {
-      const res = await axios.post("/upload", formData, {
+      const { data } = await axios.get("/get-upload-id");
+      const uploadId = data.upload_id;
+      formData.append("upload_id", uploadId);
+
+      await axios.post("/upload", formData, {
         onUploadProgress: (progressEvent) => {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadProgress(percent);
         },
       });
-      alert("업로드 완료: " + res.data.message);
-      setUploadProgress(0);
-      window.location.href = "/ui/";
+
+      connectWebSocket(uploadId);
     } catch (err) {
       console.error("업로드 실패", err);
       alert("업로드 실패: " + err.response?.data?.detail || err.message);
@@ -60,11 +67,40 @@ export default function UploadPage() {
     }
   };
 
+  const connectWebSocket = (uploadId) => {
+    const ws = new WebSocket(`ws://localhost:8000/ws/upload/${uploadId}`);
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("[WS] 상태 수신:", data);
+
+      setStatus(`상태: ${data.status}`);
+
+      if (["completed", "failed", "duplicate"].includes(data.status)) {
+        ws.close();
+        setUploadProgress(0);
+
+        if (data.status === "completed") {
+          alert("업로드 완료!");
+          navigate("/ui");
+        } else if (data.status === "duplicate") {
+          alert("중복된 파일입니다.");
+        } else {
+          alert("업로드 실패");
+        }
+      }
+    };
+
+    ws.onerror = () => {
+      alert("WebSocket 오류");
+      setUploadProgress(0);
+    };
+  };
+
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-2xl font-bold">업로드할 파일</h1>
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        {/* 썸네일 업로드 */}
         <div
           onClick={() => document.getElementById("thumbInput").click()}
           className="w-full h-40 border-2 border-dashed flex items-center justify-center rounded cursor-pointer bg-yellow-300"
@@ -83,7 +119,6 @@ export default function UploadPage() {
           />
         </div>
 
-        {/* 파일 업로드 */}
         <div className="flex flex-col gap-4 w-full">
           <div
             onClick={() => document.getElementById("fileInput").click()}
@@ -130,6 +165,10 @@ export default function UploadPage() {
                 {uploadProgress}%
               </div>
             </div>
+          )}
+
+          {status && (
+            <div className="text-sm text-gray-700">현재 상태: {status}</div>
           )}
 
           <button

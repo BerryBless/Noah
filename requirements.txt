@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 aiofiles
 pymongo
@@ -10,3 +10,4 @@ yake
 python-dotenv
 google-api-python-client
 motor
+loguru>=0.7.2

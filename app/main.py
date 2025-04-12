@@ -10,6 +10,7 @@ import logging
 from fastapi.responses import FileResponse
 from fastapi import Request
 from app.api import get_upload_id
+from app.api import ws_upload
 
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
@@ -31,6 +32,7 @@ app.add_middleware(LimitUploadSizeMiddleware)
 # ----------------------
 app.include_router(upload.router)
 app.include_router(get_upload_id.router) 
+app.include_router(ws_upload.router)
 app.include_router(files.router, prefix="/api/files")
 # app.include_router(test_mongo.router, prefix="/dev")  # ← 테스트용 API 경로
 

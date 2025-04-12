@@ -22,16 +22,21 @@ logger = logging.getLogger(__name__)
 # ----------------------
 # param   : page - 현재 페이지 번호 (1부터)
 # param   : size - 페이지당 항목 수
-# function: 페이징된 파일 메타 목록 반환
-# return  : {"total": 전체 수, "items": [FileMeta...]}
+# function: 완료된 업로드만 페이징하여 파일 메타 목록 반환
+# return  : {"total": 전체 수, "page": 현재 페이지, "size": 페이지당 수, "items": [파일 정보]}
 # ----------------------
 @router.get("/", response_model=None)
 async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=100)):
     try:
         skip = (page - 1) * size
 
-        total = await db.file_meta.count_documents({})
-        cursor = db.file_meta.find().sort("created_at", -1).skip(skip).limit(size)
+        # ----------------------
+        # 완료된 파일만 필터링
+        # ----------------------
+        query = {"status": "completed"}
+
+        total = await db.file_meta.count_documents(query)
+        cursor = db.file_meta.find(query).sort("created_at", -1).skip(skip).limit(size)
         raw_items = await cursor.to_list(length=size)
 
         # ----------------------
@@ -68,7 +73,11 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
             else:
                 item["tags"] = [tag_map.get(raw_tags, str(raw_tags))]
 
-            item["thumbnail_path"] = os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
+            # 썸네일 파일명만 추출
+            thumb_path = item.get("thumbnail_path", "") or item.get("thumb_path", "")
+            item["thumbnail_path"] = os.path.basename(thumb_path)
+            item["file_name"] = item.get("file_name", "")
+
             items.append(item)
 
         return {
@@ -79,8 +88,10 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
         }
 
     except Exception as e:
-        print(f"[ERROR] 파일 목록 조회 실패: {e}")
+        from loguru import logger
+        logger.exception("[FILES] 파일 목록 조회 실패")
         raise HTTPException(status_code=500, detail="파일 목록 조회 중 오류 발생")
+
 
 
 # ----------------------
