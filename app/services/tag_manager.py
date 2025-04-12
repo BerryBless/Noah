@@ -6,10 +6,9 @@
 from typing import List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
-import logging
+from app.utils.logger import logger
 from app.models.tag_meta import TagMeta
 
-logger = logging.getLogger(__name__)
 
 # ----------------------
 # param   : db - MongoDB 세션

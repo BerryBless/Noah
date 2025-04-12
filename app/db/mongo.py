@@ -26,4 +26,4 @@ file_meta = db["file_meta"]
 tags = db["tags"]  # ← 이것을 "tags_collection"으로 쓰려면 아래처럼 alias 추가
 
 # 명시적인 이름 추가
-tags_collection = tags  # ← 이 줄이 없으면 import 시 오류 발생
+tags_collection = tags  

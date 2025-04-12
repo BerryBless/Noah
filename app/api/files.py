@@ -12,12 +12,11 @@ import os
 from fastapi import Path
 from bson import ObjectId
 from fastapi import HTTPException
-import logging
+from app.utils.logger import logger
 
 DATA_DIR = "/data"
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 # ----------------------
 # param   : page - 현재 페이지 번호 (1부터)

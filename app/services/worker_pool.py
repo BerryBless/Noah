@@ -5,16 +5,10 @@
 
 import threading
 import queue
-import logging
+from app.utils.logger import logger
 from typing import List, Optional
 
 from app.services.worker import run_worker_sync
-
-# ----------------------
-# 로거 설정
-# ----------------------
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 # ----------------------
 # 전역 태스크 큐 (스레드 안전)

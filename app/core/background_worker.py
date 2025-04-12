@@ -6,7 +6,7 @@
 
 import os
 import shutil
-import hashlib
+from app.utils.hash_util import compute_sha256
 import threading
 import queue
 from datetime import datetime
@@ -29,18 +29,6 @@ upload_task_queue = queue.Queue()
 NUM_WORKERS = 4
 
 # ----------------------
-# param   : file_path
-# function: SHA-256 해시 계산
-# return  : 문자열 해시값
-# ----------------------
-def calc_hash(file_path: str) -> str:
-    sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
-
-# ----------------------
 # param   : upload_id, temp_path
 # function: 해시 검사 후 중복 체크 → /data 로 이동
 # ----------------------
@@ -50,7 +38,7 @@ async def process_upload(upload_id: str, temp_path: str):
         await upload_queue.update_one({"upload_id": upload_id}, {"$set": {"status": "processing"}})
 
         # 해시 계산
-        file_hash = calc_hash(temp_path)
+        file_hash = compute_sha256(temp_path)
 
         # 중복 검사
         duplicate = await file_meta.find_one({"file_hash": file_hash})
@@ -66,7 +54,7 @@ async def process_upload(upload_id: str, temp_path: str):
 
         # 최종 저장 위치: /data/파일명
         final_dir = "/data"
-        os.makedirs(final_dir, exist_ok=True)  # ✅ /data 디렉토리 없으면 생성
+        os.makedirs(final_dir, exist_ok=True)  # /data 디렉토리 없으면 생성
 
         final_path = os.path.join(final_dir, original_filename)
         shutil.move(temp_path, final_path)

@@ -1,18 +1,14 @@
 # app/main.py
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from app.api import upload, test_mongo, files
-from app.core.limit_upload import LimitUploadSizeMiddleware
+from app.utils.logger import logger
 import os
-from fastapi.staticfiles import StaticFiles
-import logging
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
-from fastapi import Request
-from app.api import get_upload_id
-from app.api import ws_upload
+from fastapi.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles
+from app.api import upload, get_upload_id, ws_upload, files, proxy_download
+from app.core.limit_upload import LimitUploadSizeMiddleware
 
-logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
 
 # ----------------------
@@ -34,7 +30,7 @@ app.include_router(upload.router)
 app.include_router(get_upload_id.router) 
 app.include_router(ws_upload.router)
 app.include_router(files.router, prefix="/api/files")
-# app.include_router(test_mongo.router, prefix="/dev")  # ← 테스트용 API 경로
+app.include_router(proxy_download.router)  
 
 # ----------------------
 # function: React 빌드된 UI를 FastAPI 경로에 mount (/ui)

@@ -6,7 +6,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing import List, Optional
 import os
-import logging
+from app.utils.logger import logger
 import uuid
 import shutil
 from app.services.worker_pool import get_worker_pool
@@ -17,7 +17,6 @@ from datetime import datetime
 from app.core import background_worker
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 TEMP_DIR = "/data/temp"
 

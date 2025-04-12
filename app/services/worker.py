@@ -4,24 +4,18 @@
 # ----------------------
 
 import os
-import hashlib
 import shutil
-import logging
+from app.utils.logger import logger
 from datetime import datetime
 from typing import List
-#from app.db.mongo import db
 from app.models.file_meta import FileMeta
 from app.services.tag_manager import process_tags_on_upload
 from app.db.mongo_sync import sync_db
+from app.utils.hash_util import compute_sha256
 
 DATA_DIR = "/data"
 TEMP_DIR = "/data/temp"
 
-# ----------------------
-# 로거 설정
-# ----------------------
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 # ----------------------
 # param   : temp_path - 임시 저장된 파일 경로
@@ -34,7 +28,7 @@ async def run_worker(temp_path: str, tags: List[str], thumbnail_path: str = ""):
     try:
         file_name = os.path.basename(temp_path)
         file_size = os.path.getsize(temp_path)
-        file_hash = await get_file_hash(temp_path)
+        file_hash = await compute_sha256(temp_path)
 
         logger.info(f"[WORKER] 파일 처리 시작: {file_name}, 해시: {file_hash}")
 
@@ -77,17 +71,6 @@ async def run_worker(temp_path: str, tags: List[str], thumbnail_path: str = ""):
 
 
 # ----------------------
-# function: 파일 해시(SHA256) 계산
-# return  : 해시 문자열
-# ----------------------
-async def get_file_hash(path: str) -> str:
-    hash_sha256 = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            hash_sha256.update(chunk)
-    return hash_sha256.hexdigest()
-
-# ----------------------
 # function: 스레드 기반 워커 함수 (MongoDB 동기 접근용)
 # ----------------------
 def run_worker_sync(temp_path: str, tags: List[str], thumbnail_path: str = ""):
@@ -97,7 +80,7 @@ def run_worker_sync(temp_path: str, tags: List[str], thumbnail_path: str = ""):
 
         file_name = os.path.basename(temp_path)
         file_size = os.path.getsize(temp_path)
-        file_hash = get_file_hash_sync(temp_path)
+        file_hash = compute_sha256(temp_path)
 
         logger.info(f"[WORKER] 파일 처리 시작: {file_name}, 해시: {file_hash}")
 
@@ -130,11 +113,3 @@ def run_worker_sync(temp_path: str, tags: List[str], thumbnail_path: str = ""):
     except Exception as e:
         logger.exception(f"[WORKER] 예외 발생: {e}")
         
-
-def get_file_hash_sync(path: str) -> str:
-    hash_sha256 = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            hash_sha256.update(chunk)
-    return hash_sha256.hexdigest()
-
