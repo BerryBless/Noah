@@ -79,8 +79,8 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
                 item["tags"] = [tag_map.get(raw_tags, str(raw_tags))]
 
             # 썸네일 파일명만 추출
-            thumb_path = item.get("thumbnail_path", "") or item.get("thumb_path", "")
-            item["thumbnail_path"] = os.path.basename(thumb_path)
+            thumb_path = item.get("thumb_path", "") or item.get("thumb_path", "")
+            item["thumb_path"] = os.path.basename(thumb_path)
             item["file_name"] = item.get("file_name", "")
 
             items.append(item)
@@ -156,7 +156,7 @@ async def delete_file_by_hash(file_hash: str):
             logger.warning(f"[DELETE] 파일 경로 없음 (DB만 존재): {file_path}")
 
         # 썸네일 삭제
-        thumb_path = meta.get("thumbnail_path", "")
+        thumb_path = meta.get("thumb_path", "")
         if thumb_path:
             abs_thumb_path = os.path.join("/data", "thumbs", os.path.basename(thumb_path))
             if os.path.exists(abs_thumb_path):
@@ -328,7 +328,7 @@ async def search_files(
             tag_names = await get_tag_names_by_ids(db, tag_ids)
             item["tags"] = tag_names
             
-            item["thumbnail_path"] = os.path.basename(item.get("thumbnail_path", ""))
+            item["thumb_path"] = os.path.basename(item.get("thumb_path", ""))
             items.append(item)
 
         return {
@@ -361,7 +361,7 @@ async def get_file_meta(file_hash: str):
     return {
         "file_name": doc.get("file_name", ""),
         "tags": tag_names,
-        "thumbnail_path": os.path.basename(doc.get("thumbnail_path", ""))
+        "thumb_path": os.path.basename(doc.get("thumb_path", ""))
     }
 
 # ----------------------
@@ -393,7 +393,7 @@ async def update_file_metadata(
         # 썸네일 교체 처리
         # ----------------------
         if thumb:
-            old_thumb = meta.get("thumbnail_path", "")
+            old_thumb = meta.get("thumb_path", "")
             if old_thumb:
                 abs_path = os.path.join("/data/thumbs", os.path.basename(old_thumb))
                 if os.path.exists(abs_path):
@@ -401,11 +401,14 @@ async def update_file_metadata(
 
             thumbs_dir = os.path.join("/data", "thumbs")
             os.makedirs(thumbs_dir, exist_ok=True)
-            new_thumb_path = os.path.join(thumbs_dir, thumb.filename)
+                # 썸네일 이름에 file_hash prefix 추가
+            new_thumb_name = f"{file_hash}_{thumb.filename}"
+            new_thumb_path = os.path.join(thumbs_dir, new_thumb_name)
+
             with open(new_thumb_path, "wb") as f:
                 shutil.copyfileobj(thumb.file, f)
 
-            update_fields["thumbnail_path"] = f"/thumbs/{thumb.filename}"
+            update_fields["thumb_path"] = f"/thumbs/{thumb.filename}"
 
         # ----------------------
         # 태그 전처리 (공백 제거 및 빈 값 제거)

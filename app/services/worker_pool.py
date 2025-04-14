@@ -23,8 +23,8 @@ class Worker(threading.Thread):
     def run(self):
         while True:
             try:
-                temp_path, tags, thumbnail_path = task_queue.get()
-                run_worker_sync(temp_path, tags, thumbnail_path)
+                temp_path, tags, thumb_path = task_queue.get()
+                run_worker_sync(temp_path, tags, thumb_path)
                 task_queue.task_done()
             except Exception as e:
                 logger.exception("[WORKER] 처리 중 예외 발생: %s", e)
@@ -43,11 +43,11 @@ class WorkerPool:
     # ----------------------
     # param   : temp_path - 임시 저장 경로
     # param   : tags - 태그 문자열 리스트
-    # param   : thumbnail_path - 썸네일 경로
+    # param   : thumb_path - 썸네일 경로
     # function: 작업 큐에 업로드 작업 추가
     # ----------------------
-    def add_task(self, temp_path: str, tags: List[str], thumbnail_path: Optional[str] = ""):
-        task_queue.put((temp_path, tags, thumbnail_path))
+    def add_task(self, temp_path: str, tags: List[str], thumb_path: Optional[str] = ""):
+        task_queue.put((temp_path, tags, thumb_path))
 
 # ----------------------
 # 글로벌 워커풀 참조 관리

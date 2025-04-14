@@ -182,7 +182,7 @@ export default function FileList() {
         <div key={index} className="flex border rounded p-4 gap-4 items-start">
           {/* 썸네일 */}
           <img
-            src={file.thumbnail_path ? `/thumbs/${file.thumbnail_path}` : "/ui/no-thumb.png"}
+            src={file.thumb_path ? `/thumbs/${file.thumb_path}` : "/ui/no-thumb.png"}
             onError={(e) => { e.target.src = "/ui/no-thumb.png"; }}
             alt="thumbnail"
             className="w-36 h-36 object-cover bg-gray-300"

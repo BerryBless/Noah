@@ -10,7 +10,7 @@ from bson import ObjectId
 
 class FileMeta(BaseModel):
     file_name: str
-    thumbnail_path: Optional[str] = ""
+    thumb_path: Optional[str] = ""
     tags: List[ObjectId] = []  # tag_name이 아닌 ObjectId로 참조
     file_size: int
     file_hash: str

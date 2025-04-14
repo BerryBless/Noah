@@ -24,14 +24,14 @@ export default function EditPage() {
 
   // ----------------------
   // function: 초기 데이터 로딩
-  // return  : file_name, tags, thumbnail_path 세팅
+  // return  : file_name, tags, thumb_path 세팅
   // ----------------------
   useEffect(() => {
     axios.get(`/api/files/file/hash/${file_hash}`).then((res) => {
       setFileName(res.data.file_name);
       setTags(res.data.tags.join(", "));
-      setThumbPreview(`/thumbs/${res.data.thumbnail_path}`);
-      setThumbName(res.data.thumbnail_path);
+      setThumbPreview(`/thumbs/${res.data.thumb_path}`);
+      setThumbName(res.data.thumb_path);
     });
   }, [file_hash]);
 
