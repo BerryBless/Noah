@@ -61,7 +61,7 @@ export default function EditPage() {
 
     if (thumb) formData.append("thumb", thumb);
 
-    await axios.put("/api/files/file/meta", formData);
+    await axios.put("/api/files/meta", formData);
     navigate("/", { replace: true });
   };
 

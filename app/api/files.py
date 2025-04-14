@@ -26,19 +26,21 @@ router = APIRouter()
 # return  : {"total": 전체 수, "page": 현재 페이지, "size": 페이지당 수, "items": [파일 정보]}
 # ----------------------
 @router.get("/", response_model=None)
-async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=100)):
+async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=100),sort: str = Query("created")):
     try:
-        skip = (page - 1) * size
 
         # ----------------------
         # 완료된 파일만 필터링
         # ----------------------
+        skip = (page - 1) * size
         query = {"status": "completed"}
+                # 정렬 기준 설정
+        sort_field = "created_at" if sort == "created" else "file_name"
+        sort_order = -1 if sort == "created" else 1
 
         total = await db.file_meta.count_documents(query)
-        cursor = db.file_meta.find(query).sort("created_at", -1).skip(skip).limit(size)
+        cursor = db.file_meta.find(query, collation={"locale": "ko", "strength": 1}).sort(sort_field, sort_order).skip(skip).limit(size)
         raw_items = await cursor.to_list(length=size)
-
         # ----------------------
         # 모든 태그 ObjectId 수집
         # ----------------------
@@ -62,6 +64,8 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
         # ----------------------
         # 변환된 결과 구성 - 태그명, 썸네일 포함
         # ----------------------
+        logger.info(f"[SEARCH DEBUG] query={query}")
+
         items = []
         for item in raw_items:
             item.pop("_id", None)
@@ -88,7 +92,6 @@ async def get_files(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=1
         }
 
     except Exception as e:
-        from loguru import logger
         logger.exception("[FILES] 파일 목록 조회 실패")
         raise HTTPException(status_code=500, detail="파일 목록 조회 중 오류 발생")
 
@@ -258,46 +261,67 @@ async def search_tags(q: Optional[str] = None, limit: int = 20):
 # param   : tag - 태그명 (선택)
 # param   : keyword - 파일명 검색 키워드 (선택)
 # param   : page - 페이지 번호 (1부터)
-# function: 태그 + 키워드 기반 파일 검색, 10개 단위 페이징
-# return  : {"total", "page", "items": [...]}
+# param   : sort - 정렬 기준 ("created" 또는 "name")
+# function: 태그 또는 키워드 기반 파일 검색 + 페이징 + 정렬 + 한글 collation 대응
+# return  : {"total", "page", "size", "items": [...]}
 # ----------------------
-@router.get("/files/search")
+@router.get("/search")
 async def search_files(
     tag: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
-    page: int = Query(1, ge=1)
+    page: int = Query(1, ge=1),
+    sort: str = Query("created")
 ):
+    logger.info(f"[SEARCH DEBUG] tag={tag}, keyword={keyword}, page={page}, sort={sort}")
+    
     try:
         # ----------------------
-        # 조건 구성 (태그/키워드)
+        # 검색 조건 구성
         # ----------------------
-        query = {}
+        query = {"status": "completed"}
+
         if tag:
             tag_doc = await db.tags.find_one({"tag_name": tag})
             if not tag_doc:
                 raise HTTPException(status_code=404, detail="해당 태그를 찾을 수 없습니다.")
             query["tags"] = tag_doc["_id"]
 
-        if keyword:
+        elif keyword:
             query["file_name"] = {"$regex": keyword, "$options": "i"}
 
+        else:
+            raise HTTPException(status_code=400, detail="tag 또는 keyword 중 하나는 반드시 입력되어야 합니다.")
+
+        logger.info(f"[SEARCH DEBUG] tag={tag}, keyword={keyword}, query={query}")
+
+        # ----------------------
+        # 정렬 및 페이징 설정
+        # ----------------------
         size = 10
         skip = (page - 1) * size
+        sort_field = "created_at" if sort == "created" else "file_name"
+        sort_order = -1 if sort == "created" else 1
 
+        # ----------------------
+        # MongoDB 쿼리 실행 (한글 대응 collation 포함)
+        # ----------------------
         total = await db.file_meta.count_documents(query)
-        cursor = db.file_meta.find(query).sort("created_at", -1).skip(skip).limit(size)
+        cursor = db.file_meta.find(query, collation={"locale": "ko", "strength": 1}) \
+            .sort(sort_field, sort_order) \
+            .skip(skip) \
+            .limit(size)
+
         raw_items = await cursor.to_list(length=size)
 
         # ----------------------
-        # 결과 구성 (태그 문자열 + 썸네일 포함)
+        # 결과 구성
         # ----------------------
         items = []
         for item in raw_items:
             item.pop("_id", None)
-            item["file_hash"] = item.get("file_hash")
-
+            item["file_hash"] = item.get("file_hash", "")
             item["tags"] = [str(t) for t in item.get("tags", [])]
-            item["thumbnail_path"] =  os.path.basename(item.get("thumbnail_path", "")) # 썸네일 명시 포함
+            item["thumbnail_path"] = os.path.basename(item.get("thumbnail_path", ""))
             items.append(item)
 
         return {
@@ -309,9 +333,11 @@ async def search_files(
 
     except HTTPException:
         raise
+
     except Exception as e:
         logger.exception(f"[SEARCH] 복합 검색 중 예외 발생: {e}")
         raise HTTPException(status_code=500, detail="파일 검색 중 오류가 발생했습니다.")
+
 
 # ----------------------
 # function: file_hash 기준으로 파일 정보 조회 (수정용)
@@ -339,7 +365,7 @@ async def get_file_meta(file_hash: str):
 from fastapi import UploadFile, File, Form
 from typing import List
 
-@router.put("/file/meta")
+@router.put("/meta")
 async def update_file_metadata(
     file_hash: str = Form(...),
     file_name: str = Form(...),
