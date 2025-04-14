@@ -4,7 +4,7 @@
 // ----------------------
 
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 export default function EditPage() {
@@ -20,6 +20,8 @@ export default function EditPage() {
   const [thumbPreview, setThumbPreview] = useState("");
   const [thumbName, setThumbName] = useState("");
 
+  const inputRef = useRef(null); // input[type=file] 숨겨진 요소 접근용
+
   // ----------------------
   // function: 초기 데이터 로딩
   // return  : file_name, tags, thumbnail_path 세팅
@@ -34,6 +36,19 @@ export default function EditPage() {
   }, [file_hash]);
 
   // ----------------------
+  // function: 썸네일 파일 선택 처리
+  // ----------------------
+  const handleThumbnail = (file) => {
+    if (file) {
+      setThumb(file);
+      setThumbName(file.name);
+      const reader = new FileReader();
+      reader.onload = () => setThumbPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // ----------------------
   // function: 저장 요청 처리
   // return  : 성공 시 목록 페이지로 이동
   // ----------------------
@@ -44,9 +59,6 @@ export default function EditPage() {
     formData.append("file_hash", file_hash);
     formData.append("file_name", fileName);
 
-    // ----------------------
-    // 유효한 태그만 추출 (빈값, 공백 제거)
-    // ----------------------
     const validTags = tags
       .split(",")
       .map((tag) => tag.trim())
@@ -55,8 +67,7 @@ export default function EditPage() {
     if (validTags.length > 0) {
       validTags.forEach((tag) => formData.append("tags", tag));
     } else {
-      // 아예 태그 전송 안 하거나 빈값 전송
-      formData.append("tags", ""); // 서버에서 [] 처리
+      formData.append("tags", "");
     }
 
     if (thumb) formData.append("thumb", thumb);
@@ -69,10 +80,7 @@ export default function EditPage() {
     <div className="p-4 max-w-xl mx-auto">
       <h1 className="text-xl mb-4">파일 정보 수정</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-
-        {/* ----------------------
-            파일 이름 입력
-        ---------------------- */}
+        {/* 파일 이름 */}
         <div>
           <label className="block mb-1">파일 이름</label>
           <input
@@ -83,9 +91,7 @@ export default function EditPage() {
           />
         </div>
 
-        {/* ----------------------
-            태그 입력
-        ---------------------- */}
+        {/* 태그 */}
         <div>
           <label className="block mb-1">태그 (쉼표로 구분)</label>
           <input
@@ -96,37 +102,31 @@ export default function EditPage() {
           />
         </div>
 
-        {/* ----------------------
-            썸네일 업로드 - UploadPage 스타일
-        ---------------------- */}
+        {/* 썸네일 업로드 */}
         <div>
           <label className="block mb-1">썸네일</label>
-
-          {/* 업로드 박스 */}
-          <label className="flex items-center justify-center w-full h-32 border-2 border-dashed rounded cursor-pointer bg-white hover:bg-gray-50 text-gray-500 text-sm">
+          <label
+            onClick={() => inputRef.current.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files[0];
+              handleThumbnail(file);
+            }}
+            className="flex items-center justify-center w-full h-32 border-2 border-dashed rounded cursor-pointer bg-white hover:bg-gray-50 text-gray-500 text-sm"
+          >
             <span>
               {thumbName ? `선택됨: ${thumbName}` : "썸네일을 드래그하거나 클릭해서 선택하세요"}
             </span>
             <input
+              ref={inputRef}
               type="file"
               accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  setThumb(file);
-                  setThumbName(file.name);
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    setThumbPreview(reader.result);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
+              onChange={(e) => handleThumbnail(e.target.files[0])}
               className="hidden"
             />
           </label>
 
-          {/* 썸네일 미리보기 */}
           {thumbPreview && (
             <img
               src={thumbPreview}
@@ -136,7 +136,6 @@ export default function EditPage() {
           )}
         </div>
 
-        {/* 저장 버튼 */}
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
           저장
         </button>
