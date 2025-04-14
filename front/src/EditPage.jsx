@@ -3,12 +3,15 @@
 // function: 메타데이터 전체 수정 페이지 (파일 이름, 태그, 썸네일 수정)
 // ----------------------
 
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams  } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
+
 export default function EditPage() {
   const { file_hash } = useParams();
+  const [searchParams] = useSearchParams();
+  const page = searchParams.get("page") || 1; // 기본값 1
   const navigate = useNavigate();
 
   // ----------------------
@@ -73,7 +76,7 @@ export default function EditPage() {
     if (thumb) formData.append("thumb", thumb);
 
     await axios.put("/api/files/meta", formData);
-    navigate("/", { replace: true });
+    navigate(`/?page=${page}`, { replace: true }); // 이전페이지로 이동
   };
 
   return (
