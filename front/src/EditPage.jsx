@@ -29,7 +29,7 @@ export default function EditPage() {
   useEffect(() => {
     axios.get(`/api/files/file/hash/${file_hash}`).then((res) => {
       setFileName(res.data.file_name);
-      setTags(res.data.tags.join(", "));
+      setTags(res.data.tags.join(" "));
       setThumbPreview(`/thumbs/${res.data.thumb_path}`);
       setThumbName(res.data.thumb_path);
     });
