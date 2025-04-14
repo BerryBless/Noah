@@ -420,6 +420,23 @@ async def update_file_metadata(
         new_tag_ids = await process_tags_on_upload(db, cleaned_tags, is_new_file=True)
         update_fields["tags"] = new_tag_ids
 
+
+        # ----------------------
+        # 실제 파일명 변경 처리 (file_name 변경 시)
+        # ----------------------
+        old_file_path = os.path.join(DATA_DIR, meta["file_name"])
+        new_file_path = os.path.join(DATA_DIR, file_name)
+
+        if old_file_path != new_file_path:
+            if os.path.exists(old_file_path):
+                os.rename(old_file_path, new_file_path)
+                logger.info(f"[META-UPDATE] 파일명 변경됨: {old_file_path} → {new_file_path}")
+
+                # 실제 경로가 바뀌었으므로 DB의 file_path도 함께 수정
+                update_fields["file_path"] = new_file_path
+            else:
+                logger.warning(f"[META-UPDATE] 실제 파일이 존재하지 않음: {old_file_path}")
+
         # ----------------------
         # DB 업데이트
         # ----------------------
