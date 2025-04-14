@@ -14,6 +14,7 @@ from bson import ObjectId
 from fastapi import HTTPException
 from app.utils.logger import logger
 import shutil
+from app.services.tag_manager import get_tag_names_by_ids
 
 DATA_DIR = "/data"
 
@@ -320,7 +321,13 @@ async def search_files(
         for item in raw_items:
             item.pop("_id", None)
             item["file_hash"] = item.get("file_hash", "")
-            item["tags"] = [str(t) for t in item.get("tags", [])]
+
+
+            #태그 이름
+            tag_ids = item.get("tags", [])
+            tag_names = await get_tag_names_by_ids(db, tag_ids)
+            item["tags"] = tag_names
+            
             item["thumbnail_path"] = os.path.basename(item.get("thumbnail_path", ""))
             items.append(item)
 
