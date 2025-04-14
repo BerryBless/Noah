@@ -60,7 +60,7 @@ export default function EditPage() {
     formData.append("file_name", fileName);
 
     const validTags = tags
-      .split(",")
+      .split(" ")
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
 
@@ -93,7 +93,7 @@ export default function EditPage() {
 
         {/* 태그 */}
         <div>
-          <label className="block mb-1">태그 (쉼표로 구분)</label>
+          <label className="block mb-1">태그 (스페이스로 구분)</label>
           <input
             type="text"
             value={tags}
