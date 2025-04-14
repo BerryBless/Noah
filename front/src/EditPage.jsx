@@ -105,7 +105,9 @@ export default function EditPage() {
         {/* 썸네일 업로드 */}
         <div>
           <label className="block mb-1">썸네일</label>
-          <label
+
+          {/* 업로드 박스 (label이 아닌 div로 클릭 이벤트 처리) */}
+          <div
             onClick={() => inputRef.current.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -118,15 +120,19 @@ export default function EditPage() {
             <span>
               {thumbName ? `선택됨: ${thumbName}` : "썸네일을 드래그하거나 클릭해서 선택하세요"}
             </span>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleThumbnail(e.target.files[0])}
-              className="hidden"
-            />
-          </label>
+          </div>
 
+          {/* 실제 input은 label 바깥에 위치 */}
+          <input
+            id="thumbInput"
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleThumbnail(e.target.files[0])}
+            className="hidden"
+          />
+
+          {/* 썸네일 미리보기 */}
           {thumbPreview && (
             <img
               src={thumbPreview}
