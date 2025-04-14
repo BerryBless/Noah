@@ -63,7 +63,7 @@ async def decrease_tag_count_on_delete(db: AsyncIOMotorDatabase, tag_ids: List[O
 def split_tags(raw_tags: List[str]) -> List[str]:
     result = []
     for tag in raw_tags:
-        parts = tag.split(",")  # 쉼표로 분리
+        parts = tag.split(" ")  # 스페이스바 분리
         result.extend(part.strip() for part in parts if part.strip())
     return result
 

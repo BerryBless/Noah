@@ -408,7 +408,7 @@ async def update_file_metadata(
             with open(new_thumb_path, "wb") as f:
                 shutil.copyfileobj(thumb.file, f)
 
-            update_fields["thumb_path"] = f"/thumbs/{thumb.filename}"
+            update_fields["thumb_path"] = f"/thumbs/{new_thumb_name}"
 
         # ----------------------
         # 태그 전처리 (공백 제거 및 빈 값 제거)
