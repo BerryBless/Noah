@@ -103,7 +103,7 @@ export default function EditPage() {
       }
 
       const data = res.data.data;
-      setFileName(`[${rjCode}] ${data.title}`);
+      //setFileName(`[${rjCode}] ${data.title}`);
       setTags(data.tags.join(" "));
       setThumbPreview(data.thumbnail);
       setThumbName(`${rjCode}.jpg`);

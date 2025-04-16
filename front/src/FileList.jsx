@@ -134,7 +134,7 @@ export default function FileList() {
         const data = res.data.data;
         const formData = new FormData();
         formData.append("file_hash", file.file_hash);
-        formData.append("file_name", `[${rjCode}] ${data.title}`);
+        formData.append("file_name", file.file_name);  // ✅ 제목은 기존 유지
         data.tags.forEach(tag => formData.append("tags", tag));
 
         // 썸네일 이미지 다운로드 후 FormData에 첨부
