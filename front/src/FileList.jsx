@@ -1,6 +1,6 @@
 // ----------------------
 // file   : FileList.jsx
-// function: 파일 목록 조회 + 검색 + 정렬 + 하이라이트 + 페이지네이션 + 삭제
+// function: 파일 목록 조회 + 검색 + 정렬 + 하이라이트 + 페이지네이션 + 삭제 + RJ코드 일괄 크롤링
 // ----------------------
 
 import React, { useEffect, useState } from 'react';
@@ -21,7 +21,7 @@ export default function FileList() {
   const navigate = useNavigate();
 
   // ----------------------
-  // 계산된 현재 페이지 번호 (URL 기준)
+  // 계산된 현재 페이지 번호
   // ----------------------
   const page = Number(searchParams.get("page")) || 1;
 
@@ -34,7 +34,7 @@ export default function FileList() {
   }, [location.search, sort]);
 
   // ----------------------
-  // function: 검색어 강조 처리
+  // function: 검색어 강조 표시
   // ----------------------
   const highlight = (text, keyword) => {
     if (!keyword) return text;
@@ -59,7 +59,7 @@ export default function FileList() {
   };
 
   // ----------------------
-  // function: 서버에서 검색 결과 조회 (tag: 포함)
+  // function: 검색 수행 (태그 또는 키워드)
   // ----------------------
   const handleSearch = async () => {
     try {
@@ -112,6 +112,49 @@ export default function FileList() {
   };
 
   // ----------------------
+  // function: RJ코드 크롤링 (태그 없는 파일만 자동 업데이트)
+  // ----------------------
+  const handleBulkCrawl = async () => {
+    if (!window.confirm("RJ코드 포함 + 태그 없는 파일을 자동 보정하시겠습니까?")) return;
+
+    const rjRegex = /RJ\d{4,}/i;
+
+    for (const file of files) {
+      if (!file.file_name.match(rjRegex)) continue;
+      if (!file.tags || file.tags.length > 0) continue;
+
+      const rjCode = file.file_name.match(rjRegex)[0].toUpperCase();
+      try {
+        const res = await axios.get(`/api/fetch-rj-info?rj_code=${rjCode}`);
+        if (!res.data.success) {
+          console.warn(`[SKIP] ${file.file_name}: 크롤링 실패`);
+          continue;
+        }
+
+        const data = res.data.data;
+        const formData = new FormData();
+        formData.append("file_hash", file.file_hash);
+        formData.append("file_name", `[${rjCode}] ${data.title}`);
+        data.tags.forEach(tag => formData.append("tags", tag));
+
+        // 썸네일 이미지 다운로드 후 FormData에 첨부
+        const imgRes = await fetch(data.thumbnail);
+        const blob = await imgRes.blob();
+        const thumbFile = new File([blob], `${rjCode}.jpg`, { type: blob.type });
+        formData.append("thumb", thumbFile);
+
+        await axios.put("/api/files/meta", formData);
+        console.log(`[OK] ${rjCode} 업데이트 완료`);
+      } catch (e) {
+        console.error(`[ERROR] ${file.file_name}`, e);
+      }
+    }
+
+    alert("자동 크롤링 완료. 목록을 새로고침합니다.");
+    fetchFiles();
+  };
+
+  // ----------------------
   // 계산: 전체 페이지 수
   // ----------------------
   const totalPages = Math.ceil(total / size);
@@ -147,7 +190,7 @@ export default function FileList() {
         )}
       </div>
 
-      {/* 정렬 + 업로드 */}
+      {/* 정렬 + 업로드 + 크롤링 */}
       <div className="flex justify-between items-center mb-2">
         <p className="text-blue-500 font-semibold">총 {total}개 파일</p>
         <div className="flex items-center gap-4">
@@ -162,17 +205,19 @@ export default function FileList() {
             <option value="created">최신순</option>
             <option value="name">파일명순</option>
           </select>
-          <a
-            href="/ui/upload"
-            className="text-green-600 font-semibold hover:underline"
+          <a href="/ui/upload" className="text-green-600 font-semibold hover:underline">업로드</a>
+          <button
+            onClick={handleBulkCrawl}
+            className="px-4 py-2 bg-red-600 text-white rounded"
           >
-            업로드
-          </a>
+            RJ코드 크롤링
+          </button>
         </div>
       </div>
 
-      {/* 파일 목록 */}
-      {files.length === 0 ? (
+      {/* 파일 목록 및 페이지네이션은 동일 */}
+{/* 파일 목록 */}
+{files.length === 0 ? (
         <p className="text-gray-500 italic">표시할 파일이 없습니다.</p>
       ) : (
         files.map((file, index) => (
