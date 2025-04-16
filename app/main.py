@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
 from app.api import upload, get_upload_id, ws_upload, files, proxy_download
+from app.api import fetch_info
 #from app.core.limit_upload import LimitUploadSizeMiddleware
 
 app = FastAPI()
@@ -32,6 +33,7 @@ app.include_router(get_upload_id.router)
 app.include_router(ws_upload.router)
 app.include_router(files.router, prefix="/api/files")
 app.include_router(proxy_download.router)  
+app.include_router(fetch_info.router, prefix="/api")
 
 # ----------------------
 # function: React 빌드된 UI를 FastAPI 경로에 mount (/ui)

@@ -12,3 +12,6 @@ google-api-python-client
 motor
 loguru>=0.7.2
 aioresponses
+beautifulsoup4 
+lxml 
+httpx
