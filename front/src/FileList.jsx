@@ -7,6 +7,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
+// ----------------------
+// function: 바이트 단위 → 사람이 읽기 쉬운 형식으로 변환
+// return  : "123.4 MB" 형태 문자열
+// ----------------------
+const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
 export default function FileList() {
   // ----------------------
   // state
@@ -216,8 +229,8 @@ export default function FileList() {
       </div>
 
       {/* 파일 목록 및 페이지네이션은 동일 */}
-{/* 파일 목록 */}
-{files.length === 0 ? (
+      {/* 파일 목록 */}
+      {files.length === 0 ? (
         <p className="text-gray-500 italic">표시할 파일이 없습니다.</p>
       ) : (
         files.map((file, index) => (
@@ -230,16 +243,21 @@ export default function FileList() {
             />
             <div className="flex-1 space-y-2">
               <div className="flex justify-between items-center">
-                <a
-                  href={`/api/files/download/${file.file_hash}`}
-                  className="text-xl font-semibold text-blue-600 hover:underline"
-                  download
-                >
-                  {query && !query.startsWith("tag:")
-                    ? highlight(file.file_name, query)
-                    : file.file_name}
-                </a>
+                <div>
+                  <p className="text-xl font-semibold text-gray-800">
+                    {file.file_name}
+                  </p>
+                  <p className="text-sm text-gray-500">{formatBytes(file.file_size)}</p>
+                </div>
+
                 <div className="flex gap-2">
+                  <a
+                    href={`/api/files/download/${file.file_hash}`}
+                    className="text-sm border border-blue-600 text-blue-600 px-2 py-1 rounded hover:bg-blue-50"
+                    download
+                  >
+                    다운로드
+                  </a>
                   <button
                     onClick={() => navigate(`/edit/${file.file_hash}?page=${page}`)}
                     className="text-yellow-600 border border-yellow-600 hover:bg-yellow-100 px-2 py-1 text-sm rounded"
@@ -254,6 +272,7 @@ export default function FileList() {
                   </button>
                 </div>
               </div>
+
               {file.tags && file.tags.length > 0 ? (
                 <div className="grid grid-cols-4 gap-2">
                   {file.tags.map((tag, i) => (
