@@ -7,6 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 import json
+import os
 
 MONGO_URI = os.getenv("MONGO_URI", "")
 router = APIRouter()
