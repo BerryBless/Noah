@@ -16,9 +16,14 @@ from app.utils.logger import logger
 import shutil
 from app.services.tag_manager import get_tag_names_by_ids
 
+from motor.motor_asyncio import AsyncIOMotorClient
+import re
 DATA_DIR = "/data"
+MONGO_URI = os.getenv("MONGO_URI", "")
 
 router = APIRouter()
+client = AsyncIOMotorClient(MONGO_URI)
+db = client["noah_db"]
 
 # ----------------------
 # param   : page - 현재 페이지 번호 (1부터)
@@ -460,3 +465,101 @@ async def update_file_metadata(
     except Exception as e:
         logger.exception(f"[META-UPDATE] 파일 메타데이터 수정 중 예외 발생: {e}")
         raise HTTPException(status_code=500, detail="파일 메타데이터 수정 중 오류 발생")
+    
+
+
+
+# ----------------------
+# function: 파일명에서 단어 추출
+# ----------------------
+def normalize(text: str) -> str:
+    # 대소문자 무시, 특수문자 제거, 전부 붙이기
+    return re.sub(r"[^\w가-힣]", "", text.lower())
+
+def tokenize(text: str) -> set:
+    # 1. 먼저 띄어쓰기 기준 분할
+    base = re.sub(r"[^\w가-힣]", " ", text.lower())
+    words = base.split()
+
+    # 2. 추가로 붙어있는 형태를 나눠서 탐지 (슬라이딩 윈도우식)
+    merged = normalize(text)
+    chunks = re.findall(r"[가-힣]+|[a-z]+|[0-9]+", merged)
+
+    tokens = set(words + chunks)
+
+    # 조사 제거
+    stopwords = {"입니다", "하다", "의", "에", "이", "가", "을", "를", "다", "zip", "ver"}
+    filtered = {t for t in tokens if t not in stopwords and len(t) > 1}
+
+    return set(sorted(filtered))
+
+# ----------------------
+# function: 자카드 유사도 계산
+# ----------------------
+def jaccard_similarity(set1, set2):
+    if not set1 or not set2:
+        return 0
+    return len(set1 & set2) / len(set1 | set2)
+
+
+# ----------------------
+# API: 유사 파일 그룹핑
+# ----------------------
+@router.get("/grouped")
+async def get_grouped_files():
+    all_files = await db.file_meta.find({}).to_list(length=None)
+    tokenized = [(f, tokenize(f["file_name"])) for f in all_files]
+
+    # 로그: 파일명 + 토큰 확인
+    # for f, tokens in tokenized:
+    #     logger.debug(f"[GROUPING] {f['file_name']} → {tokens}")
+
+    used = set()
+    groups = []
+
+    for i, (file_i, tokens_i) in enumerate(tokenized):
+        if i in used:
+            continue
+
+        group = [dict(file_i)]
+        used.add(i)
+
+        for j in range(i + 1, len(tokenized)):
+            if j in used:
+                continue
+
+            file_j, tokens_j = tokenized[j]
+            sim = jaccard_similarity(tokens_i, tokens_j)
+
+            logger.debug(f"[COMPARE] {file_i['file_name']} ↔ {file_j['file_name']} = {sim:.2f}")
+
+            if sim >= 0.3:
+                group.append(dict(file_j))
+                used.add(j)
+
+        if len(group) > 1:
+            for item in group:
+                item.pop("_id", None)
+            groups.append(group)
+
+    return {"groups": groups}
+
+# db테스트
+from bson.json_util import dumps
+from fastapi.responses import JSONResponse
+
+@router.get("/all")
+async def get_all_files(sort: str = Query("created", enum=["created", "name"])):
+    sort_field = "created_at" if sort == "created" else "file_name"
+    direction = -1 if sort == "created" else 1
+
+    cursor = db.file_meta.find({}).sort(sort_field, direction)
+    raw_items = await cursor.to_list(length=None)
+
+    return JSONResponse(
+        content=dumps({
+            "items": raw_items,
+            "total": len(raw_items)
+        }),
+        media_type="application/json"
+    )

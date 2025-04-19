@@ -225,6 +225,12 @@ export default function FileList() {
           >
             RJ코드 크롤링
           </button>
+          <button
+            onClick={() => navigate("/grouped")}
+            className="px-4 py-2 bg-purple-600 text-white rounded"
+          >
+            그룹별로 묶기
+          </button>
         </div>
       </div>
 

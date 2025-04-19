@@ -8,8 +8,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 import json
 
+MONGO_URI = os.getenv("MONGO_URI", "")
 router = APIRouter()
-client = AsyncIOMotorClient("mongodb://host.docker.internal:27017")
+client = AsyncIOMotorClient(MONGO_URI)
 db = client["noah_db"]
 upload_queue = db["upload_queue"]
 

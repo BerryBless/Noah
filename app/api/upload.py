@@ -17,8 +17,9 @@ import app.core.background_worker as background_worker
 router = APIRouter()
 
 TEMP_DIR = "/data/temp"
+MONGO_URI = os.getenv("MONGO_URI", "")
 
-client = AsyncIOMotorClient("mongodb://host.docker.internal:27017")
+client = AsyncIOMotorClient(MONGO_URI)
 db = client["noah_db"]
 upload_queue = db["upload_queue"]
 
