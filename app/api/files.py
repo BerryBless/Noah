@@ -18,6 +18,10 @@ from app.services.tag_manager import get_tag_names_by_ids
 
 from motor.motor_asyncio import AsyncIOMotorClient
 import re
+# db테스트
+from bson.json_util import dumps
+from fastapi.responses import JSONResponse
+
 DATA_DIR = "/data"
 MONGO_URI = os.getenv("MONGO_URI", "")
 
@@ -531,22 +535,33 @@ async def get_grouped_files():
             file_j, tokens_j = tokenized[j]
             sim = jaccard_similarity(tokens_i, tokens_j)
 
-            logger.debug(f"[COMPARE] {file_i['file_name']} ↔ {file_j['file_name']} = {sim:.2f}")
+            #logger.debug(f"[COMPARE] {file_i['file_name']} ↔ {file_j['file_name']} = {sim:.2f}")
 
-            if sim >= 0.3:
+            if sim >= 0.4:
                 group.append(dict(file_j))
                 used.add(j)
 
         if len(group) > 1:
+            cleaned_group = []
             for item in group:
+                item = dict(item)
                 item.pop("_id", None)
-            groups.append(group)
+
+                # ObjectId → str 변환 (tags 필드 등)
+                if "tags" in item and isinstance(item["tags"], list):
+                    item["tags"] = [str(t) for t in item["tags"]]
+                elif isinstance(item.get("tags"), ObjectId):
+                    item["tags"] = [str(item["tags"])]
+
+                item["thumb_path"] = os.path.basename(item.get("thumb_path", "") or "")
+                item["file_name"] = item.get("file_name", "")
+                item["file_hash"] = item.get("file_hash", "")
+                item["file_size"] = item.get("file_size", 0)
+
+                cleaned_group.append(item)
+            groups.append(cleaned_group)
 
     return {"groups": groups}
-
-# db테스트
-from bson.json_util import dumps
-from fastapi.responses import JSONResponse
 
 @router.get("/all")
 async def get_all_files(sort: str = Query("created", enum=["created", "name"])):
