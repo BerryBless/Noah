@@ -28,7 +28,7 @@ NUM_WORKERS = 4
 
 # ----------------------
 # param   : upload_id, file_name, temp_path
-# function: 해시 검사 후 중복 체크 → /data 로 이동
+# function: 해시 검사 후 중복 체크 → 해시 기반 파일명으로 /data 이동
 # ----------------------
 def process_upload(upload_id: str, file_name: str, temp_path: str):
     try:
@@ -39,10 +39,14 @@ def process_upload(upload_id: str, file_name: str, temp_path: str):
             {"$set": {"status": "processing"}}
         )
 
-        # 해시 계산
+        # ----------------------
+        # 파일 해시 계산
+        # ----------------------
         file_hash = compute_sha256(temp_path)
 
+        # ----------------------
         # 중복 검사
+        # ----------------------
         duplicate = file_meta.find_one({"file_hash": file_hash})
         if duplicate:
             upload_queue.update_one(
@@ -53,21 +57,28 @@ def process_upload(upload_id: str, file_name: str, temp_path: str):
             logger.info(f"[WORKER] {upload_id} / {file_name} 중복파일로 삭제됨")
             return
 
+        # ----------------------
         # 썸네일 경로 가져오기 (없으면 "")
+        # ----------------------
         upload_info = upload_queue.find_one({"upload_id": upload_id, "file_name": file_name})
         thumb_path = upload_info.get("thumb_path", "") if upload_info else ""
 
-        # 최종 저장 위치: /data/파일명
+        # ----------------------
+        # 최종 저장 경로: /data/{해시}_{파일명}
+        # ----------------------
         final_dir = "/data"
         os.makedirs(final_dir, exist_ok=True)
 
-        final_path = os.path.join(final_dir, file_name)
+        final_filename = f"{file_hash}_{file_name}"
+        final_path = os.path.join(final_dir, final_filename)
         shutil.move(temp_path, final_path)
 
-        # 메타데이터 저장
+        # ----------------------
+        # MongoDB 메타데이터 저장
+        # ----------------------
         file_meta.insert_one({
-            "file_name": file_name,
-            "file_path": final_path,
+            "file_name": file_name,                # 원래 이름
+            "file_path": final_path,               # 해시_이름
             "file_size": os.path.getsize(final_path),
             "file_hash": file_hash,
             "thumb_path": thumb_path,
@@ -78,8 +89,13 @@ def process_upload(upload_id: str, file_name: str, temp_path: str):
 
         upload_queue.update_one(
             {"upload_id": upload_id, "file_name": file_name},
-            {"$set": {"status": "completed"}}
+            {"$set": {
+                "status": "completed",
+                "file_hash": file_hash,
+                "file_path": final_path
+            }}
         )
+
         logger.info(f"[WORKER] {upload_id} / {file_name} 완료")
 
     except Exception:

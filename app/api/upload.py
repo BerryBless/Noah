@@ -37,11 +37,9 @@ async def upload_files_background(
     upload_id: Optional[str] = Form(None)
 ):
     try:
-        # 업로드 ID 없으면 새로 생성
         if not upload_id:
             upload_id = str(uuid.uuid4())
 
-        # 임시 디렉토리 생성
         os.makedirs(TEMP_DIR, exist_ok=True)
 
         # ----------------------
@@ -49,7 +47,7 @@ async def upload_files_background(
         # ----------------------
         thumb_path = ""
         if thumb:
-            thumbs_dir = os.path.join("/data", "thumbs")
+            thumbs_dir = os.path.join(DATA_DIR, "thumbs")
             os.makedirs(thumbs_dir, exist_ok=True)
             thumb_path = os.path.join(thumbs_dir, f"{upload_id}_{thumb.filename}")
             with open(thumb_path, "wb") as f:
@@ -57,34 +55,32 @@ async def upload_files_background(
             logger.info(f"[UPLOAD] 썸네일 저장 완료: {thumb_path}")
 
         # ----------------------
-        # 각 파일 저장 및 큐 등록
+        # 파일 저장 및 큐 등록 (임시 저장 → 워커 처리)
         # ----------------------
         for file in files:
             temp_path = os.path.join(TEMP_DIR, f"{upload_id}_{file.filename}")
             with open(temp_path, "wb") as f:
                 shutil.copyfileobj(file.file, f)
+            logger.info(f"[UPLOAD] 파일 임시 저장 완료: {temp_path}")
 
-            logger.info(f"[UPLOAD] 파일 저장 완료: {temp_path}")
+            await websocket_manager.broadcast(upload_id, {
+                "upload_id": upload_id,
+                "file_name": file.filename,
+                "status": "completed",
+                "progress": 100
+            })
 
-            # WebSocket 알림 (단순 완료 기준)
-            if upload_id:
-                await websocket_manager.broadcast(upload_id, {
-                    "upload_id": upload_id,
-                    "file_name": file.filename,
-                    "status": "completed",
-                    "progress": 100
-                })
-
-            # MongoDB 메타데이터 저장
+            # DB 대기 등록
             await upload_queue.insert_one({
                 "upload_id": upload_id,
                 "file_name": file.filename,
+                "temp_path": temp_path,
                 "thumb_path": thumb_path,
                 "status": "pending",
                 "created_at": datetime.utcnow()
             })
 
-            # 워커 등록 (upload_id, file_name, temp_path 전달)
+            # 워커에 등록 (워커가 해시 계산 및 이동 수행)
             background_worker.enqueue(upload_id, file.filename, temp_path)
 
         return {"upload_id": upload_id}

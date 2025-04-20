@@ -120,14 +120,16 @@ async def download_file_by_hash(file_hash: str):
         if not meta:
             raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
-        file_path = os.path.join(DATA_DIR, meta["file_name"])
+        file_path = os.path.join(DATA_DIR, meta["file_path"])
+        original_name = meta["file_name"]
+
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="파일이 서버에 존재하지 않습니다.")
 
         # 실제 파일 응답
         return FileResponse(
             path=file_path,
-            filename=meta["file_name"],
+            filename=original_name,
             media_type="application/octet-stream"  
         )
 
