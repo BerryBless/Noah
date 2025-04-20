@@ -124,48 +124,28 @@ export default function FileList() {
     }
   };
 
-  // ----------------------
-  // function: RJ코드 크롤링 (태그 없는 파일만 자동 업데이트)
-  // ----------------------
-  const handleBulkCrawl = async () => {
-    if (!window.confirm("RJ코드 포함 + 태그 없는 파일을 자동 보정하시겠습니까?")) return;
+// ----------------------
+// function: RJ코드 크롤링 (태그 없는 파일만 백엔드 일괄 크롤링)
+// ----------------------
+const handleBulkCrawl = async () => {
+  if (!window.confirm("태그가 없는 RJ코드 파일들을 백엔드에서 자동 보정하시겠습니까?")) return;
 
-    const rjRegex = /RJ\d{4,}/i;
+  try {
+    const res = await axios.post("/api/fetch-rj-batch");
+    const { updated, skipped, error } = res.data;
 
-    for (const file of files) {
-      if (!file.file_name.match(rjRegex)) continue;
-      if (!file.tags || file.tags.length > 0) continue;
-
-      const rjCode = file.file_name.match(rjRegex)[0].toUpperCase();
-      try {
-        const res = await axios.get(`/api/fetch-rj-info?rj_code=${rjCode}`);
-        if (!res.data.success) {
-          console.warn(`[SKIP] ${file.file_name}: 크롤링 실패`);
-          continue;
-        }
-
-        const data = res.data.data;
-        const formData = new FormData();
-        formData.append("file_hash", file.file_hash);
-        formData.append("file_name", file.file_name);  // ✅ 제목은 기존 유지
-        data.tags.forEach(tag => formData.append("tags", tag));
-
-        // 썸네일 이미지 다운로드 후 FormData에 첨부
-        const imgRes = await fetch(data.thumbnail);
-        const blob = await imgRes.blob();
-        const thumbFile = new File([blob], `${rjCode}.jpg`, { type: blob.type });
-        formData.append("thumb", thumbFile);
-
-        await axios.put("/api/files/meta", formData);
-        console.log(`[OK] ${rjCode} 업데이트 완료`);
-      } catch (e) {
-        console.error(`[ERROR] ${file.file_name}`, e);
-      }
+    if (error) {
+      alert("크롤링 중 오류 발생: " + error);
+    } else {
+      alert(`크롤링 완료\n업데이트: ${updated}개\n스킵: ${skipped}개`);
+      fetchFiles(); // 목록 갱신
     }
+  } catch (err) {
+    console.error("[ERROR] RJ 자동 크롤링 요청 실패", err);
+    alert("서버 요청 실패");
+  }
+};
 
-    alert("자동 크롤링 완료. 목록을 새로고침합니다.");
-    fetchFiles();
-  };
 
   // ----------------------
   // 계산: 전체 페이지 수

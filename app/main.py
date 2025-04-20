@@ -35,7 +35,7 @@ app.include_router(ws_upload.router)
 app.include_router(files.router, prefix="/api/files")
 app.include_router(proxy_download.router)  
 app.include_router(fetch_info.router, prefix="/api")
-app.include_router(maintenance.router, prefix="/api/maintenance")
+app.include_router(maintenance.router)
 
 # ----------------------
 # function: React 빌드된 UI를 FastAPI 경로에 mount (/ui)
