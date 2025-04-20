@@ -64,6 +64,9 @@ async def fix_filenames_to_hash_prefix():
 
 
 
+# ----------------------
+# function: 전체 크롤링
+# ----------------------
 @router.post("/admin/fetch-rj-batch")
 async def fetch_rj_batch():
     try:
@@ -120,3 +123,64 @@ async def fetch_rj_batch():
     except Exception as e:
         logger.exception("[BATCH] RJ 자동 태그 크롤링 실패")
         return {"error": str(e)}
+
+# ----------------------
+# function: 모든 파일의 무결성 검사 (DB 기록과 실제 파일 비교)
+# return  : {total, checked, broken: [{file_hash, file_name, reason}]}
+# ----------------------
+from datetime import datetime
+DATA_DIR = "/data"
+THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
+
+@router.post("/verify-and-clean")
+async def verify_and_cleanup_files():
+    total = 0
+    removed = 0
+    error_logged = 0
+
+    try:
+        cursor = db.file_meta.find()
+        async for file in cursor:
+            total += 1
+            file_name = file.get("file_name")
+            file_hash = file.get("file_hash")
+            expected_size = file.get("file_size")
+            thumb_path = file.get("thumb_path", "")
+
+            file_path = file.get("file_path")
+            reason = ""
+
+            # 원본 파일 확인
+            if not os.path.exists(file_path):
+                reason = "file not found"
+            elif os.path.getsize(file_path) != expected_size:
+                reason = f"size mismatch (expected {expected_size}, actual {os.path.getsize(file_path)})"
+
+            # 썸네일 확인
+            # if not reason:  # 파일은 정상일 때만 검사
+            #     if not thumb_path:
+            #         reason = "thumbnail path missing"
+            #     else:
+            #         thumb_full_path = os.path.join(DATA_DIR, thumb_path.lstrip("/"))
+            #         if not os.path.exists(thumb_full_path):
+            #             reason = f"thumbnail not found at {thumb_path}"
+
+            if reason:
+                file["reason"] = reason
+                file["moved_at"] = datetime.utcnow()
+                await db.error_log.insert_one(file)
+                await db.file_meta.delete_one({"file_hash": file_hash})
+
+                removed += 1
+                error_logged += 1
+                logger.warning(f"[INTEGRITY] 손상 항목 이동됨: {file_name} - {reason}")
+
+        return {
+            "total": total,
+            "removed": removed,
+            "error_logged": error_logged
+        }
+
+    except Exception as e:
+        logger.exception(f"[INTEGRITY] 무결성 검사 중 예외 발생: {e}")
+        raise HTTPException(status_code=500, detail="무결성 검사 실패")
