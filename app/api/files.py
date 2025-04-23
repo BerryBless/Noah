@@ -509,20 +509,41 @@ def jaccard_similarity(set1, set2):
 
 
 # ----------------------
-# API: 유사 파일 그룹핑
+# API: 유사 파일 그룹핑 (RJ코드 기준 그룹 우선)
 # ----------------------
 @router.get("/grouped")
 async def get_grouped_files():
     all_files = await db.file_meta.find({}).to_list(length=None)
     tokenized = [(f, tokenize(f["file_name"])) for f in all_files]
 
-    # 로그: 파일명 + 토큰 확인
-    # for f, tokens in tokenized:
-    #     logger.debug(f"[GROUPING] {f['file_name']} → {tokens}")
-
     used = set()
     groups = []
 
+    # ----------------------
+    # Step 1. RJ코드 기준 그룹핑
+    # ----------------------
+    rj_groups = {}
+    rj_pattern = re.compile(r"RJ\d{4,}", re.IGNORECASE)
+
+    for idx, (file, _) in enumerate(tokenized):
+        match = rj_pattern.search(file["file_name"])
+        if match:
+            rj_code = match.group(0).upper()
+            rj_groups.setdefault(rj_code, []).append(idx)
+
+    for rj_code, indices in rj_groups.items():
+        group = []
+        for idx in indices:
+            if idx in used:
+                continue
+            used.add(idx)
+            group.append(dict(tokenized[idx][0]))
+        if len(group) > 1:
+            groups.append(group)
+
+    # ----------------------
+    # Step 2. 자카드 유사도 기반 추가 그룹핑
+    # ----------------------
     for i, (file_i, tokens_i) in enumerate(tokenized):
         if i in used:
             continue
@@ -537,46 +558,35 @@ async def get_grouped_files():
             file_j, tokens_j = tokenized[j]
             sim = jaccard_similarity(tokens_i, tokens_j)
 
-            #logger.debug(f"[COMPARE] {file_i['file_name']} ↔ {file_j['file_name']} = {sim:.2f}")
-
             if sim >= 0.4:
                 group.append(dict(file_j))
                 used.add(j)
 
         if len(group) > 1:
-            cleaned_group = []
-            for item in group:
-                item = dict(item)
-                item.pop("_id", None)
+            groups.append(group)
 
-                # ObjectId → str 변환 (tags 필드 등)
-                if "tags" in item and isinstance(item["tags"], list):
-                    item["tags"] = [str(t) for t in item["tags"]]
-                elif isinstance(item.get("tags"), ObjectId):
-                    item["tags"] = [str(item["tags"])]
+    # ----------------------
+    # Step 3. 그룹 클린업
+    # ----------------------
+    cleaned_groups = []
+    for group in groups:
+        cleaned_group = []
+        for item in group:
+            item = dict(item)
+            item.pop("_id", None)
 
-                item["thumb_path"] = os.path.basename(item.get("thumb_path", "") or "")
-                item["file_name"] = item.get("file_name", "")
-                item["file_hash"] = item.get("file_hash", "")
-                item["file_size"] = item.get("file_size", 0)
+            # tags: ObjectId → str
+            if "tags" in item and isinstance(item["tags"], list):
+                item["tags"] = [str(t) for t in item["tags"]]
+            elif isinstance(item.get("tags"), ObjectId):
+                item["tags"] = [str(item["tags"])]
 
-                cleaned_group.append(item)
-            groups.append(cleaned_group)
+            item["thumb_path"] = os.path.basename(item.get("thumb_path", "") or "")
+            item["file_name"] = item.get("file_name", "")
+            item["file_hash"] = item.get("file_hash", "")
+            item["file_size"] = item.get("file_size", 0)
 
-    return {"groups": groups}
+            cleaned_group.append(item)
+        cleaned_groups.append(cleaned_group)
 
-@router.get("/all")
-async def get_all_files(sort: str = Query("created", enum=["created", "name"])):
-    sort_field = "created_at" if sort == "created" else "file_name"
-    direction = -1 if sort == "created" else 1
-
-    cursor = db.file_meta.find({}).sort(sort_field, direction)
-    raw_items = await cursor.to_list(length=None)
-
-    return JSONResponse(
-        content=dumps({
-            "items": raw_items,
-            "total": len(raw_items)
-        }),
-        media_type="application/json"
-    )
+    return {"groups": cleaned_groups}
