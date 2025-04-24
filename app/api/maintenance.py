@@ -14,7 +14,9 @@ from app.utils.logger import logger
 import re
 import requests
 from io import BytesIO
+from datetime import datetime
 
+DATA_DIR = "/data"
 
 MONGO_URI = os.getenv("MONGO_URI", "")
 router = APIRouter()
@@ -184,3 +186,78 @@ async def verify_and_cleanup_files():
     except Exception as e:
         logger.exception(f"[INTEGRITY] 무결성 검사 중 예외 발생: {e}")
         raise HTTPException(status_code=500, detail="무결성 검사 실패")
+
+
+# ----------------------
+# file   : app/api/files.py
+# route  : /api/files/recover-all
+# function: error_log → file_meta 복구 (파일/썸네일 검사 포함, 실패 시 recover_failed_log에 기록)
+# return  : 결과 요약
+# ----------------------
+
+
+@router.post("/admin/recover-all")
+async def recover_all_files():
+    total = 0
+    recovered = 0
+    skipped = 0
+    failed = 0
+
+    try:
+        cursor = db.error_log.find()
+        async for entry in cursor:
+            total += 1
+            file_hash = entry.get("file_hash")
+            file_name = entry.get("file_name")
+            expected_size = entry.get("file_size")
+            thumb_path = entry.get("thumb_path", "")
+
+            # file_meta에 이미 존재하는 경우 스킵
+            existing = await db.file_meta.find_one({"file_hash": file_hash})
+            if existing:
+                skipped += 1
+                continue
+
+            # 원본 파일 확인
+            file_path = os.path.join(DATA_DIR, file_name)
+            if not os.path.exists(file_path) or os.path.getsize(file_path) != expected_size:
+                await db.recover_failed_log.insert_one({
+                    "file_hash": file_hash,
+                    "reason": "original file invalid",
+                    "attempted_at": datetime.utcnow()
+                })
+                failed += 1
+                continue
+
+            # 썸네일 확인 (있을 경우만)
+            if thumb_path:
+                thumb_full_path = os.path.join(DATA_DIR, thumb_path.lstrip("/"))
+                if not os.path.exists(thumb_full_path):
+                    await db.recover_failed_log.insert_one({
+                        "file_hash": file_hash,
+                        "reason": "thumbnail not found",
+                        "attempted_at": datetime.utcnow()
+                    })
+                    failed += 1
+                    continue
+
+            # 복구 처리
+            entry.pop("_id", None)
+            entry.pop("reason", None)
+            entry.pop("moved_at", None)
+
+            await db.file_meta.insert_one(entry)
+            await db.error_log.delete_one({"file_hash": file_hash})
+            recovered += 1
+            logger.info(f"[RECOVER] 복구 완료: {file_hash}")
+
+        return {
+            "total_attempted": total,
+            "successfully_recovered": recovered,
+            "skipped_due_to_existing": skipped,
+            "failed_to_recover": failed
+        }
+
+    except Exception as e:
+        logger.exception(f"[RECOVER-ALL] 일괄 복구 중 예외 발생: {e}")
+        raise HTTPException(status_code=500, detail="일괄 복구 중 오류 발생")
