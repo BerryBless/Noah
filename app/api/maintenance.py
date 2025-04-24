@@ -220,7 +220,7 @@ async def recover_all_files():
 
             # 원본 파일 확인
             file_path = entry.get("file_path")
-            if not os.path.exists(file_path) or 
+            if not os.path.exists(file_path)
                 await db.recover_failed_log.insert_one({
                     "file_hash": file_hash,
                     "reason": "original file invalid",
