@@ -228,6 +228,8 @@ async def recover_all_files():
                 })
                 failed += 1
                 continue
+            if not os.path.exists(file_path):
+                logger.warning(f"[MISSING] {file_path} NOT FOUND (from {file_name})")
 
             # 썸네일 확인 (있을 경우만)
             if thumb_path:
