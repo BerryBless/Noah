@@ -220,16 +220,26 @@ async def recover_all_files():
 
             # 원본 파일 확인
             file_path = entry.get("file_path")
-            if not os.path.exists(file_path) or os.path.getsize(file_path) != expected_size:
+            if not os.path.exists(file_path) or 
                 await db.recover_failed_log.insert_one({
                     "file_hash": file_hash,
                     "reason": "original file invalid",
                     "attempted_at": datetime.utcnow()
                 })
                 failed += 1
-                continue
-            if not os.path.exists(file_path):
                 logger.warning(f"[MISSING] {file_path} NOT FOUND (from {file_name})")
+                continue
+
+            file_size =os.path.getsize(file_path)
+            if file_size != expected_size:
+                await db.recover_failed_log.insert_one({
+                    "file_hash": file_hash,
+                    "reason": "original file size invalid",
+                    "attempted_at": datetime.utcnow()
+                })
+                failed += 1
+                logger.warning(f"[MISSING] {file_path} NOT MACHED FILE SIZE (origin {expected_size} , target  {file_size})")
+                continue
 
             # 썸네일 확인 (있을 경우만)
             if thumb_path:
