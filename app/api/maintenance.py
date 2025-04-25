@@ -73,8 +73,8 @@ async def fix_filenames_to_hash_prefix():
 async def fetch_rj_batch():
     try:
         query = {
-            "tags": {"$in": [[], None]},
-            "file_name": {"$regex": "RJ\\d{4,}", "$options": "i"}
+            "file_name": {"$regex": "RJ\\d{4,}", "$options": "i"},
+            "thumb_path": {"$in": [None, ""]}
         }
         cursor = db.file_meta.find(query)
         updated = 0
@@ -88,6 +88,15 @@ async def fetch_rj_batch():
                 skipped += 1
                 continue
 
+            # 썸네일이 존재하는 경우 실제 파일도 확인
+            thumb_path = file.get("thumb_path", "")
+            if thumb_path:
+                full_path = f"/data/thumbs/{thumb_path}"
+                if os.path.exists(full_path):
+                    logger.info(f"[SKIP] 썸네일 존재: {file_name}")
+                    skipped += 1
+                    continue
+
             rj_code = rj_match.group(0).upper()
             result = crawl_dlsite_info(rj_code)
             if not result:
@@ -96,13 +105,13 @@ async def fetch_rj_batch():
                 continue
 
             # 썸네일 다운로드
-            thumb_path = ""
+            new_thumb_path = ""
             try:
                 response = requests.get(result["thumbnail"])
                 ext = result["thumbnail"].split(".")[-1]
                 filename = f"{file_hash}.{ext}"
-                thumb_path = f"thumbs/{filename}"
-                with open(f"/data/{thumb_path}", "wb") as f:
+                new_thumb_path = f"thumbs/{filename}"
+                with open(f"/data/{new_thumb_path}", "wb") as f:
                     f.write(response.content)
             except Exception as e:
                 logger.warning(f"[SKIP] 썸네일 저장 실패: {file_name}, {e}")
@@ -110,7 +119,7 @@ async def fetch_rj_batch():
             update_fields = {
                 "tags": result["tags"],
             }
-            if thumb_path:
+            if new_thumb_path:
                 update_fields["thumb_path"] = filename
 
             await db.file_meta.update_one(
@@ -123,7 +132,7 @@ async def fetch_rj_batch():
         return {"updated": updated, "skipped": skipped}
 
     except Exception as e:
-        logger.exception("[BATCH] RJ 자동 태그 크롤링 실패")
+        logger.exception("[BATCH] RJ 자동 썸네일 보완 실패")
         return {"error": str(e)}
 
 # ----------------------
